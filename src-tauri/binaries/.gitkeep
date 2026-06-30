@@ -1,0 +1,3 @@
+# The compiled Go backend lives here as sborka-core-<target-triple>(.exe).
+# Build it with scripts/build-sidecar.sh before running 'npm run tauri build'.
+# This directory is intentionally tracked but its binaries are gitignored.

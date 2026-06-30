@@ -1,0 +1,31 @@
+{
+  "projectId": "c2553962-b1e0-44b7-bb71-8df92771a5f4",
+  "pkg": "flapp",
+  "globalName": "flapp",
+  "shape": "package",
+  "srcDir": "src/shared/ui",
+  "tsconfig": "tsconfig.json",
+  "cssEntry": "src/app/styles/tokens.css",
+  "runtimeFontPrefixes": ["JetBrains Mono", "SF Mono"],
+  "extraFonts": ["src/app/styles/fonts.css"],
+  "readmeHeader": ".design-sync/conventions.md",
+  "overrides": {
+    "DropZone":    {"cardMode": "column"},
+    "Input":       {"cardMode": "column"},
+    "ProgressBar": {"cardMode": "column"},
+    "Tabs":        {"cardMode": "column"}
+  },
+  "componentSrcMap": {
+    "Button":      "src/shared/ui/Button.tsx",
+    "PlayButton":  "src/shared/ui/PlayButton.tsx",
+    "Input":       "src/shared/ui/Input.tsx",
+    "Checkbox":    "src/shared/ui/Checkbox.tsx",
+    "CategoryTag": "src/shared/ui/CategoryTag.tsx",
+    "Card":        "src/shared/ui/Card.tsx",
+    "ProgressBar": "src/shared/ui/ProgressBar.tsx",
+    "StatStrip":   "src/shared/ui/StatStrip.tsx",
+    "Tabs":        "src/shared/ui/Tabs.tsx",
+    "DropZone":    "src/shared/ui/DropZone.tsx",
+    "Icons":       "src/shared/ui/Icons.tsx"
+  }
+}

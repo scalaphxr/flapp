@@ -1,0 +1,14 @@
+{
+  "name": "flapp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Flapp — десктоп-менеджер сэмплов для битмейкеров (Tauri + Go + React)",
+  "scripts": {
+    "install:frontend": "npm --prefix frontend install",
+    "build:sidecar": "bash scripts/build-sidecar.sh",
+    "build:frontend": "npm --prefix frontend run build",
+    "dev": "frontend\\node_modules\\.bin\\tauri dev",
+    "build": "npm run build:sidecar && frontend\\node_modules\\.bin\\tauri build",
+    "tauri": "npm --prefix frontend run tauri --"
+  }
+}

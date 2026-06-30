@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(go version *)",
+      "PowerShell(winget *)",
+      "PowerShell(choco *)",
+      "PowerShell(Get-Command *)",
+      "PowerShell($vswhere = \"${env:ProgramFiles\\(x86\\)}\\\\Microsoft Visual Studio\\\\Installer\\\\vswhere.exe\"; if \\(Test-Path $vswhere\\) { & $vswhere -all -format json | ConvertFrom-Json | Select-Object installationVersion, installationPath, displayName } else { \"vswhere not found\" })",
+      "PowerShell(New-Item *)",
+      "PowerShell(Invoke-WebRequest -Uri \"https://win.rustup.rs/x86_64\" -OutFile \"$env:TEMP\\\\sborka-install\\\\rustup-init.exe\" -UseBasicParsing; Write-Host \"rustup-init.exe скачан\")",
+      "PowerShell(Read-Host *)",
+      "PowerShell(Write-Host \"Устанавливаю Go...\"; Start-Process msiexec.exe -ArgumentList \"/i `\"$env:TEMP\\\\sborka-install\\\\go-installer.msi`\" /quiet /norestart\" -Wait -Verb RunAs; Write-Host \"Go установлен\")",
+      "PowerShell(Write-Host \"Скачиваю VS Build Tools \\(~5 MB bootstrapper\\)...\"; Invoke-WebRequest -Uri \"https://aka.ms/vs/17/release/vs_buildtools.exe\" -OutFile \"$env:TEMP\\\\sborka-install\\\\vs_buildtools.exe\" -UseBasicParsing; Write-Host \"Скачан: $\\(\\(Get-Item \"$env:TEMP\\\\sborka-install\\\\vs_buildtools.exe\"\\).Length / 1KB -as [int]\\) KB\")",
+      "PowerShell(Write-Host \"Устанавливаю MSVC Build Tools \\(C++ workload\\) — это займёт 5-15 минут...\"; Start-Process \"$env:TEMP\\\\sborka-install\\\\vs_buildtools.exe\" -ArgumentList \"--quiet --wait --norestart --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended\" -Wait -Verb RunAs; Write-Host \"MSVC Build Tools установлены\")",
+      "PowerShell($vswhere = \"${env:ProgramFiles\\(x86\\)}\\\\Microsoft Visual Studio\\\\Installer\\\\vswhere.exe\"; & $vswhere -all -format json | ConvertFrom-Json | Select-Object installationVersion, displayName, installationPath)",
+      "PowerShell(Get-ChildItem *)",
+      "PowerShell(Test-Path *)",
+      "PowerShell(Write-Host \"Запускаю rustup-init.exe...\"; & \"$env:TEMP\\\\sborka-install\\\\rustup-init.exe\" -y --default-toolchain stable-msvc 2>&1; Write-Host \"Exit code: $LASTEXITCODE\")",
+      "PowerShell(rustc *)",
+      "PowerShell($env:PATH = \"$env:USERPROFILE\\\\.cargo\\\\bin;C:\\\\Program Files\\\\Go\\\\bin;\" + [System.Environment]::GetEnvironmentVariable\\(\"PATH\", \"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"PATH\", \"User\"\\); cd \"C:\\\\Users\\\\flipgod\\\\Desktop\\\\sborka-zvukov\"; powershell -ExecutionPolicy Bypass -File scripts\\\\build-sidecar.ps1 2>&1)",
+      "PowerShell(npm run *)",
+      "PowerShell($env:PATH = \"$env:USERPROFILE\\\\.cargo\\\\bin;C:\\\\Program Files\\\\Go\\\\bin;\" + [System.Environment]::GetEnvironmentVariable\\(\"PATH\", \"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"PATH\", \"User\"\\); cd \"C:\\\\Users\\\\flipgod\\\\Desktop\\\\sborka-zvukov\\\\frontend\"; node_modules\\\\.bin\\\\tauri --version 2>&1)",
+      "PowerShell($wv2 = Get-ItemProperty \"HKLM:\\\\SOFTWARE\\\\WOW6432Node\\\\Microsoft\\\\EdgeUpdate\\\\Clients\\\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}\" -ErrorAction SilentlyContinue; if \\($wv2\\) { Write-Host \"WebView2: $\\($wv2.pv\\)\" } else { $wv2u = Get-ItemProperty \"HKCU:\\\\Software\\\\Microsoft\\\\EdgeUpdate\\\\Clients\\\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}\" -ErrorAction SilentlyContinue; if \\($wv2u\\) { Write-Host \"WebView2 \\(user\\): $\\($wv2u.pv\\)\" } else { Write-Host \"WebView2 not found — Tauri won't run without it\" } })",
+      "PowerShell(npm *)",
+      "PowerShell($env:PATH = \"$env:USERPROFILE\\\\.cargo\\\\bin;C:\\\\Program Files\\\\Go\\\\bin;$env:PATH\"; Set-Location \"C:\\\\Users\\\\flipgod\\\\Desktop\\\\sborka-zvukov\"; .\\\\frontend\\\\node_modules\\\\.bin\\\\tauri build 2>&1)",
+      "Skill(run)"
+    ]
+  }
+}

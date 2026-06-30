@@ -1,0 +1,377 @@
+/* ============================================================
+   TOKENS — Flapp
+   Цвета разбиты на три блока [data-theme=…] на <html>.
+   Нецветовые токены (шрифты, отступы, радиусы, анимация)
+   живут в :root и не дублируются по темам.
+   ============================================================ */
+
+
+/* ============================================================
+   ТЕМА: Нейтральная тёмная (dark) — без тёплого подтона
+   ============================================================ */
+[data-theme="dark"] {
+  /* Фон и поверхности — нейтральные серые */
+  --bg-base:        #16161A;
+  --bg-sunken:      #111115;
+  --surface-1:      #1C1C22;
+  --surface-2:      #222228;
+  --surface-3:      #2A2A32;
+  --surface-4:      #32323A04;
+  --surface-hover:  #2A2A32;
+  --surface-active: #32323A;
+
+  /* Разделители */
+  --border-soft:    #2C2C38;
+  --border-medium:  #38384A;
+  --border-strong:  #48485A;
+
+  /* Текст — чистый, без тёплого оттенка */
+  --text-strong:    #F0F0F5;
+  --text-body:      #D8D8E0;
+  --text-muted:     #9090A8;
+  --text-faint:     #60607A;
+  --text-on-accent: #1A1008;
+
+  /* Акцент — тот же коралловый (хорошо читается на нейтральном тёмном) */
+  --accent:         #E8845C;
+  --accent-hover:   #EE9168;
+  --accent-press:   #D9744D;
+  --accent-amber:   #F0A868;
+  --accent-soft:    #E8845C26;
+  --accent-softer:  #E8845C14;
+  --accent-ring:    #E8845C66;
+
+  /* Статусы */
+  --positive:       #7AB05A;
+  --warning:        #E0A455;
+  --danger:         #D9714E;
+
+  /* Категории — те же тёплые тона, хорошо читаются на нейтральном фоне */
+  --cat-808:        #D98C6A;  --cat-808-bg:      #D98C6A24;
+  --cat-kick:       #E0926A;  --cat-kick-bg:     #E0926A24;
+  --cat-snare:      #E0A455;  --cat-snare-bg:    #E0A45524;
+  --cat-clap:       #D98E8E;  --cat-clap-bg:     #D98E8E24;
+  --cat-hihat:      #C7B36A;  --cat-hihat-bg:    #C7B36A24;
+  --cat-openhat:    #B6B97A;  --cat-openhat-bg:  #B6B97A24;
+  --cat-cymbal:     #CBBE8A;  --cat-cymbal-bg:   #CBBE8A24;
+  --cat-perc:       #A8B27A;  --cat-perc-bg:     #A8B27A24;
+  --cat-vox:        #C79BC4;  --cat-vox-bg:      #C79BC424;
+  --cat-bass:       #B79BD4;  --cat-bass-bg:     #B79BD424;
+  --cat-drumloop:   #C9A06A;  --cat-drumloop-bg: #C9A06A24;
+  --cat-fx:         #C98BA8;  --cat-fx-bg:       #C98BA824;
+  --cat-unsorted:   #9898A0;  --cat-unsorted-bg: #9898A020;
+
+  --row-zebra: #1A1A22;
+
+  --shadow-sm:  0 1px 2px rgba(0, 0, 0, 0.36);
+  --shadow-md:  0 4px 16px rgba(0, 0, 0, 0.40);
+  --shadow-lg:  0 12px 32px rgba(0, 0, 0, 0.52);
+  --shadow-pop: 0 16px 48px rgba(0, 0, 0, 0.65);
+
+  --glow-accent:      0 0 0 1px var(--accent-ring), 0 8px 28px rgba(232, 132, 92, 0.22);
+  --glow-accent-soft: 0 0 40px rgba(232, 132, 92, 0.14);
+  --glow-primary-btn: 0 6px 20px rgba(232, 132, 92, 0.30);
+}
+
+/* ============================================================
+   ТЕМА: Светлая (light) — тёплый кремовый фон, тёмный текст
+   Акцент и категорийные теги затемнены для WCAG AA (≥4.5:1).
+   ============================================================ */
+[data-theme="light"] {
+  /* Фон и поверхности — тёплый кремовый, не клинически белый */
+  --bg-base:        #F3F1EE;
+  --bg-sunken:      #E9E6E1;
+  --surface-1:      #FAFAF8;
+  --surface-2:      #FFFFFF;
+  --surface-3:      #F0EEEA;
+  --surface-4:      #E8E5E004;
+  --surface-hover:  #E8E5E0;
+  --surface-active: #DEDAD4;
+
+  /* Разделители */
+  --border-soft:    #E2DED8;
+  --border-medium:  #CCCAC4;
+  --border-strong:  #B0AEA8;
+
+  /* Текст */
+  --text-strong:    #1A1810;
+  --text-body:      #3A3628;
+  --text-muted:     #6A6860;
+  --text-faint:     #9A9890;
+  --text-on-accent: #FFFFFF;
+
+  /* Акцент — затемнённый коралл (~5:1 на кремовом фоне) */
+  --accent:         #A85225;
+  --accent-hover:   #BC5E2C;
+  --accent-press:   #924420;
+  --accent-amber:   #9A6A10;
+  --accent-soft:    #A8522526;
+  --accent-softer:  #A8522514;
+  --accent-ring:    #A8522555;
+
+  /* Статусы — тоже затемнены для контраста на светлом */
+  --positive:       #3E8020;
+  --warning:        #886010;
+  --danger:         #A03018;
+
+  /* Категорийные теги: текст затемнён для контраста ≥4.5:1 на светлом фоне,
+     фоновый тинт — 19% (30 hex) для мягкой пастели */
+  --cat-808:        #8A4A20;  --cat-808-bg:      #D98C6A30;
+  --cat-kick:       #944A1C;  --cat-kick-bg:     #E0926A30;
+  --cat-snare:      #8A5A10;  --cat-snare-bg:    #E0A45530;
+  --cat-clap:       #8A3C3C;  --cat-clap-bg:     #D98E8E30;
+  --cat-hihat:      #706018;  --cat-hihat-bg:    #C7B36A30;
+  --cat-openhat:    #586820;  --cat-openhat-bg:  #B6B97A30;
+  --cat-cymbal:     #787028;  --cat-cymbal-bg:   #CBBE8A30;
+  --cat-perc:       #507028;  --cat-perc-bg:     #A8B27A30;
+  --cat-vox:        #7A4878;  --cat-vox-bg:      #C79BC430;
+  --cat-bass:       #5A4888;  --cat-bass-bg:     #B79BD430;
+  --cat-drumloop:   #7A581C;  --cat-drumloop-bg: #C9A06A30;
+  --cat-fx:         #7A4062;  --cat-fx-bg:       #C98BA830;
+  --cat-unsorted:   #585050;  --cat-unsorted-bg: #998C7C28;
+
+  --row-zebra: #EAE8E3;
+
+  --shadow-sm:  0 1px 3px rgba(0, 0, 0, 0.09);
+  --shadow-md:  0 4px 16px rgba(0, 0, 0, 0.11);
+  --shadow-lg:  0 12px 32px rgba(0, 0, 0, 0.14);
+  --shadow-pop: 0 16px 48px rgba(0, 0, 0, 0.20);
+
+  --glow-accent:      0 0 0 1px var(--accent-ring), 0 8px 28px rgba(168, 82, 37, 0.20);
+  --glow-accent-soft: 0 0 40px rgba(168, 82, 37, 0.12);
+  --glow-primary-btn: 0 6px 20px rgba(168, 82, 37, 0.28);
+}
+
+/* ============================================================
+   ТЕМА: FL Studio (fl) — хром-металлик + оранжевый акцент
+   Точно воспроизводит палитру FL Studio DAW.
+   ============================================================ */
+[data-theme="fl"] {
+  /* ── FL-native palette ──────────────────────────────────────── */
+  --chrome:          #bcbfc4;
+  --chrome-hi:       #e8eaec;
+  --chrome-lo:       #8b8f95;
+  --rail:            #a6aab0;
+  --work:            #2b3039;
+  --work-2:          #323843;
+  --work-3:          #252a32;
+  --work-line:       #1d222a;
+  --browser:         #262b33;
+  --ink:             #1d2024;
+  --ink-dim:         #5d626a;
+  --ink-on-work:     #cfd3d9;
+  --ink-on-work-dim: #868c95;
+  --line:            #7d8187;
+  --line-work:       #1a1e25;
+  --panel:           #c4c7cc;
+  --panel-hi:        #e2e4e6;
+  --panel-lo:        #a4a8ae;
+  --btn:             #cdd0d4;
+  --btn-hi:          #f2f3f5;
+  --btn-lo:          #9da1a7;
+  --groove:          #171b21;
+  --lcd-bg:          #0b0f08;
+  --lcd-green:       #8dff6a;
+  --lcd-amber:       #ffb55b;
+  --led:             #76ff5e;
+  --rec:             #ff453a;
+
+  /* ── Semantic remapping ─────────────────────────────────────── */
+  --bg-base:        #2b3039;
+  --bg-sunken:      #1d222a;
+  --surface-1:      #262b33;
+  --surface-2:      #323843;
+  --surface-3:      #252a32;
+  --surface-4:      rgba(255,255,255,.02);
+  --surface-hover:  rgba(255,138,60,.1);
+  --surface-active: rgba(255,138,60,.18);
+  --surface-card:   #323843;
+  --surface-input:  #171b21;
+  --surface-panel:  #323843;
+  --surface-well:   #1d222a;
+  --row-hover:      rgba(255,138,60,.07);
+
+  --border-soft:    #1a1e25;
+  --border-medium:  #1d222a;
+  --border-strong:  #7d8187;
+
+  --text-strong:    #cfd3d9;
+  --text-body:      #cfd3d9;
+  --text-muted:     #868c95;
+  --text-faint:     #5d626a;
+  --text-on-accent: #fff;
+  --text-title:     #cfd3d9;
+  --text-description:#868c95;
+
+  --accent:         #ff8a3c;
+  --accent-hover:   #e8651e;
+  --accent-press:   #d05818;
+  --accent-amber:   #ffb55b;
+  --accent-soft:    rgba(255,138,60,.15);
+  --accent-softer:  rgba(255,138,60,.08);
+  --accent-ring:    rgba(255,138,60,.45);
+
+  --positive:       #76ff5e;
+  --warning:        #ffb55b;
+  --danger:         #ff453a;
+
+  /* ── Category tags (same warm tones on dark bg) ─────────────── */
+  --cat-808:        #D98C6A;  --cat-808-bg:      #D98C6A24;
+  --cat-kick:       #E0926A;  --cat-kick-bg:     #E0926A24;
+  --cat-snare:      #E0A455;  --cat-snare-bg:    #E0A45524;
+  --cat-clap:       #D98E8E;  --cat-clap-bg:     #D98E8E24;
+  --cat-hihat:      #C7B36A;  --cat-hihat-bg:    #C7B36A24;
+  --cat-openhat:    #B6B97A;  --cat-openhat-bg:  #B6B97A24;
+  --cat-cymbal:     #CBBE8A;  --cat-cymbal-bg:   #CBBE8A24;
+  --cat-perc:       #A8B27A;  --cat-perc-bg:     #A8B27A24;
+  --cat-vox:        #C79BC4;  --cat-vox-bg:      #C79BC424;
+  --cat-bass:       #B79BD4;  --cat-bass-bg:     #B79BD424;
+  --cat-drumloop:   #C9A06A;  --cat-drumloop-bg: #C9A06A24;
+  --cat-fx:         #C98BA8;  --cat-fx-bg:       #C98BA824;
+  --cat-unsorted:   #9898A0;  --cat-unsorted-bg: #9898A020;
+
+  --row-zebra: #252a32;
+
+  --shadow-sm:  0 1px 3px rgba(0,0,0,.55);
+  --shadow-md:  0 4px 16px rgba(0,0,0,.60);
+  --shadow-lg:  0 12px 32px rgba(0,0,0,.70);
+  --shadow-pop: 0 16px 48px rgba(0,0,0,.80);
+
+  --glow-accent:      0 0 0 1px var(--accent-ring), 0 8px 28px rgba(255,138,60,.28);
+  --glow-accent-soft: 0 0 40px rgba(255,138,60,.18);
+  --glow-primary-btn: 0 6px 20px rgba(255,138,60,.35);
+
+  /* ── Font override for FL theme ─────────────────────────────── */
+  --font-sans: 'Barlow Semi Condensed', system-ui, sans-serif;
+  --font-mono: 'Share Tech Mono', monospace;
+
+  /* ── Button style override for FL theme ─────────────────────── */
+  --btn-radius:           7px;
+  --btn-primary-bg:       linear-gradient(var(--accent), #e8651e);
+  --btn-primary-border:   #e8651e;
+  --btn-primary-color:    #fff;
+  --btn-primary-shadow:   inset 0 1px 0 rgba(255,255,255,.45), 0 0 16px rgba(255,138,60,.4), 0 2px 4px rgba(0,0,0,.25);
+  --btn-secondary-bg:     linear-gradient(var(--btn-hi), var(--btn));
+  --btn-secondary-border: var(--chrome-lo);
+  --btn-secondary-color:  var(--ink);
+  --btn-secondary-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 1px 2px rgba(0,0,0,.25);
+  --btn-ghost-color:      var(--ink-dim);
+}
+
+/* ============================================================
+   СЕМАНТИЧЕСКИЕ АЛИАСЫ — не зависят от темы, ссылаются на var()
+   ============================================================ */
+:root {
+  --text-title:        var(--text-strong);
+  --text-description:  var(--text-muted);
+  --surface-app:       var(--bg-base);
+  --surface-panel:     var(--surface-1);
+  --surface-card:      var(--surface-2);
+  --surface-input:     var(--surface-3);
+  --surface-well:      var(--bg-sunken);
+  --row-hover:         var(--accent-softer);
+  --focus-ring:        0 0 0 3px var(--accent-ring);
+
+  /* ── Button style tokens (overridden per theme) ── */
+  --btn-radius:           var(--radius-pill);
+  --btn-primary-bg:       var(--accent);
+  --btn-primary-border:   transparent;
+  --btn-primary-color:    var(--text-on-accent);
+  --btn-primary-shadow:   var(--glow-primary-btn);
+  --btn-secondary-bg:     transparent;
+  --btn-secondary-border: var(--border-medium);
+  --btn-secondary-color:  var(--text-body);
+  --btn-secondary-shadow: none;
+  --btn-ghost-color:      var(--text-muted);
+}
+
+/* ============================================================
+   ШРИФТЫ — Barlow Semi Condensed / Share Tech Mono.
+   ============================================================ */
+:root {
+  --font-sans: 'Barlow Semi Condensed', "Segoe UI", system-ui, sans-serif;
+  --font-mono: 'Share Tech Mono', "SF Mono", "JetBrains Mono", ui-monospace, monospace;
+
+  --fw-regular:  400;
+  --fw-medium:   500;
+  --fw-semibold: 600;
+  --fw-bold:     700;
+
+  --fs-display: 30px;
+  --fs-h1:      24px;
+  --fs-h2:      18px;
+  --fs-body:    14px;
+  --fs-sm:      13px;
+  --fs-label:   12px;
+  --fs-caption: 11px;
+
+  --lh-tight:   1.15;
+  --lh-snug:    1.35;
+  --lh-normal:  1.5;
+
+  --ls-tight:  -0.02em;
+  --ls-normal:  0;
+  --ls-label:   0.06em;
+
+  --type-title-size:   var(--fs-h1);
+  --type-title-weight: var(--fw-bold);
+  --type-body-size:    var(--fs-body);
+  --type-label-size:   var(--fs-label);
+
+  --section-label-transform: uppercase;
+}
+
+/* ============================================================
+   ОТСТУПЫ — 4px-сетка
+   ============================================================ */
+:root {
+  --space-0:  0;
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-7:  32px;
+  --space-8:  40px;
+  --space-9:  56px;
+  --space-10: 72px;
+
+  --pad-card:    20px;
+  --pad-row:     14px;
+  --gap-section: 24px;
+  --gap-control: 10px;
+
+  --row-height:   52px;
+  --input-height: 40px;
+  --tap-min:      44px;
+}
+
+/* ============================================================
+   СКРУГЛЕНИЯ
+   ============================================================ */
+:root {
+  --radius-sm:   8px;
+  --radius-md:   10px;
+  --radius-lg:   16px;
+  --radius-xl:   20px;
+  --radius-pill: 999px;
+
+  --radius-card:   var(--radius-lg);
+  --radius-input:  var(--radius-md);
+  --radius-row:    var(--radius-md);
+  --radius-button: var(--radius-pill);
+  --radius-badge:  var(--radius-pill);
+}
+
+/* ============================================================
+   АНИМАЦИЯ И ДВИЖЕНИЕ
+   ============================================================ */
+:root {
+  --ease-out:        cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-in-out:     cubic-bezier(0.45, 0, 0.25, 1);
+  --dur-fast:        120ms;
+  --dur-base:        180ms;
+  --dur-slow:        280ms;
+  --transition-base: all var(--dur-base) var(--ease-out);
+}

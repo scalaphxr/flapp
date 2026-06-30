@@ -1,0 +1,562 @@
+import React from "react";
+import { Button, Card, Checkbox, Icons, Input, PlayButton } from "@/shared/ui";
+import { useT } from "@/shared/i18n";
+import { api } from "@/shared/api/client";
+import type { MidiClip, MidiNote, MidiNotesResult } from "@/shared/api/types";
+import { ALL_MIDI_CATEGORIES } from "@/shared/api/types";
+import { useJobsStore } from "@/shared/model/jobs";
+import { useSettingsStore } from "@/shared/model/settings";
+import { formatDuration } from "@/shared/lib/format";
+import { pickFolder } from "@/shared/lib/tauri";
+import { useMidiPlayer } from "../midi/useMidiPlayer";
+
+// ── Category colours ──────────────────────────────────────────────────────────
+const CAT_COLOR: Record<string, string> = {
+  "808/Bass": "var(--cat-808)",   Melody: "var(--cat-hihat)",
+  Kick:       "var(--cat-kick)",  Snare:  "var(--cat-snare)",
+  Clap:       "var(--cat-clap)",  "Hi-Hat": "var(--cat-hihat)",
+  "Open Hat": "var(--cat-openhat)", Perc: "var(--cat-perc)",
+  Drums:      "var(--cat-kick)",  FX:     "var(--cat-fx)",
+  Other:      "var(--cat-unsorted)",
+};
+const CAT_BG: Record<string, string> = {
+  "808/Bass": "var(--cat-808-bg)",   Melody: "var(--cat-hihat-bg)",
+  Kick:       "var(--cat-kick-bg)",  Snare:  "var(--cat-snare-bg)",
+  Clap:       "var(--cat-clap-bg)",  "Hi-Hat": "var(--cat-hihat-bg)",
+  "Open Hat": "var(--cat-openhat-bg)", Perc: "var(--cat-perc-bg)",
+  Drums:      "var(--cat-kick-bg)",  FX:     "var(--cat-fx-bg)",
+  Other:      "var(--cat-unsorted-bg)",
+};
+
+// Row height must match the virtualization constant ROW_H below
+const ROW_H_FL  = 62;
+const ROW_H_STD = 68;
+
+// ── Column grids — identical pattern to SoundTable ────────────────────────────
+const COLS_FL  = "28px 34px minmax(0,1fr) 120px minmax(0,.9fr) 72px 36px";
+const COLS_STD = "40px 44px minmax(0,1fr) 132px minmax(0,.9fr) 72px 44px";
+const COL_GAP  = 10;
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function soundName(clip: MidiClip): string {
+  if (clip.channelName) return clip.channelName;
+  if (clip.samplePath) {
+    const b = clip.samplePath.replace(/\\/g, "/").split("/").pop() ?? "";
+    const n = b.replace(/\.[^.]+$/, "");
+    if (n) return n;
+  }
+  return `Ch ${clip.channelIndex}`;
+}
+
+// ── Main section ──────────────────────────────────────────────────────────────
+export function MidiSection() {
+  const t = useT();
+  const jobs = useJobsStore();
+  const { settings, load: loadSettings, update: updateSettings } = useSettingsStore();
+  const isFl = (settings?.theme ?? "fl") === "fl";
+
+  const [clips, setClips] = React.useState<MidiClip[]>([]);
+  const [filterCat, setFilterCat] = React.useState("");
+  const [searchQ, setSearchQ] = React.useState("");
+  const [selected, setSelected] = React.useState<Set<string>>(new Set());
+  const [packName, setPackName] = React.useState("");
+  const [donePath, setDonePath] = React.useState<string | null>(null);
+  const [dedupMsg, setDedupMsg] = React.useState<string | null>(null);
+  const [dedupRunning, setDedupRunning] = React.useState(false);
+
+  // virtualization
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+  const [scrollTop, setScrollTop] = React.useState(0);
+  const [viewH, setViewH] = React.useState(600);
+  const ROW_H = isFl ? ROW_H_FL : ROW_H_STD;
+  const BUFFER = 4;
+
+  React.useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setViewH(el.clientHeight);
+    const ro = new ResizeObserver(() => setViewH(el.clientHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  React.useEffect(() => {
+    if (!settings) loadSettings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  React.useEffect(() => {
+    return jobs.onDone((job) => {
+      if (job.type === "extract_midi" && job.status === "completed") loadClips();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function loadClips() {
+    try {
+      const { items } = await api.midiClips(filterCat || undefined);
+      setClips(items);
+    } catch (e) { console.error("midiClips:", e); }
+  }
+
+  React.useEffect(() => { loadClips(); /* eslint-disable-next-line */ }, [filterCat]);
+
+  async function handleDownload(clip: MidiClip) {
+    const url = await api.midiClipFileUrl(clip.id);
+    const a = document.createElement("a"); a.href = url; a.download = clip.fileName; a.click();
+  }
+
+  async function handlePack() {
+    if (selected.size === 0) return;
+    let outputDir = settings?.midiOutputDir ?? "";
+    if (!outputDir) {
+      const chosen = await pickFolder();
+      if (!chosen) return;
+      outputDir = chosen;
+      await updateSettings({ midiOutputDir: outputDir });
+    }
+    try {
+      const { jobId: id } = await api.midiPack([...selected], packName || undefined, outputDir);
+      jobs.onDone((job) => {
+        if (job.id === id && job.status === "completed") setDonePath((job.result as any)?.path ?? null);
+      });
+    } catch (e) { console.error("midiPack:", e); }
+  }
+
+  async function handleClear() {
+    await api.midiClear();
+    setClips([]); setSelected(new Set()); setDonePath(null); setDedupMsg(null);
+  }
+
+  async function handleDedup() {
+    setDedupRunning(true);
+    setDedupMsg(null);
+    try {
+      const result = await api.midiDedup();
+      if (result.removed === 0) {
+        setDedupMsg("Дубликатов не найдено");
+      } else {
+        setDedupMsg(`Удалено ${result.removed} дубл. в ${result.groups} группах`);
+        await loadClips(); // refresh list
+        setSelected(new Set());
+      }
+    } catch (e) {
+      console.error("midiDedup:", e);
+    } finally {
+      setDedupRunning(false);
+    }
+  }
+
+  async function handleCategoryChange(clipId: string, cat: string) {
+    setClips((p) => p.map((c) => c.id === clipId ? { ...c, category: cat as any, categoryOverride: true } : c));
+    try { await api.midiSetClipCategory(clipId, cat); } catch (e) { console.error(e); }
+  }
+
+  const filtered = React.useMemo(() => {
+    if (!searchQ.trim()) return clips;
+    const q = searchQ.toLowerCase();
+    return clips.filter((c) =>
+      c.patternName.toLowerCase().includes(q) ||
+      c.channelName.toLowerCase().includes(q) ||
+      (c.sourceName || c.projectName).toLowerCase().includes(q)
+    );
+  }, [clips, searchQ]);
+
+  const allChecked = selected.size === filtered.length && filtered.length > 0;
+  const cols = isFl ? COLS_FL : COLS_STD;
+  const midiOutputDir = settings?.midiOutputDir ?? "";
+
+  const visStart = Math.max(0, Math.floor((scrollTop - BUFFER * ROW_H) / ROW_H));
+  const visEnd   = Math.min(filtered.length - 1, Math.ceil((scrollTop + viewH + BUFFER * ROW_H) / ROW_H));
+  const topPad   = visStart * ROW_H;
+  const botPad   = Math.max(0, (filtered.length - visEnd - 1) * ROW_H);
+
+  const hdrStyle: React.CSSProperties = isFl
+    ? { display: "grid", gridTemplateColumns: cols, alignItems: "center", gap: COL_GAP, padding: "0 12px", height: 36, background: "linear-gradient(var(--work-3),var(--work-2))", borderBottom: "1px solid var(--line-work)", font: "700 10px var(--font-sans)" as any, letterSpacing: "1px", color: "var(--ink-on-work-dim)", textTransform: "uppercase" as any, flexShrink: 0 }
+    : { display: "grid", gridTemplateColumns: cols, alignItems: "center", gap: COL_GAP, padding: "0 14px", height: 36, fontSize: "var(--fs-label)", fontWeight: "var(--fw-semibold)" as any, letterSpacing: "var(--ls-label)", textTransform: "uppercase" as any, color: "var(--text-faint)", flexShrink: 0 };
+
+  if (clips.length === 0 && !filterCat) {
+    return (
+      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)", fontSize: "var(--fs-sm)" }}>
+        {t.midi.noClips}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, gap: isFl ? 0 : 10, overflow: "hidden" }}>
+
+      {/* ── Top bar ── */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0, marginBottom: isFl ? 10 : 0 }}>
+        {isFl ? (
+          <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 9, height: 38, padding: "0 14px", background: "var(--work-3)", border: "1px solid var(--line-work)", borderRadius: 7, boxShadow: "inset 0 2px 5px rgba(0,0,0,.4)" }}>
+            <Icons.Search width={15} height={15} style={{ color: "var(--ink-on-work-dim)", flexShrink: 0 }} />
+            <input value={searchQ} onChange={(e) => setSearchQ(e.target.value)} placeholder={t.common.search}
+              style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: "var(--ink-on-work)", font: "500 14px var(--font-sans)" }} />
+          </div>
+        ) : (
+          <Input icon={<Icons.Search />} placeholder={t.common.search} value={searchQ} onChange={(e) => setSearchQ(e.target.value)} style={{ flex: 1 }} />
+        )}
+        <Button variant="ghost" icon={<Icons.Dedup />} onClick={handleDedup} disabled={dedupRunning || clips.length === 0}>{t.midi.dedupBtn}</Button>
+        <Button variant="ghost" icon={<Icons.Trash />} onClick={handleClear}>{t.midi.clearClips}</Button>
+      </div>
+
+      {/* ── Card / table ── */}
+      <div style={isFl
+        ? { flex: 1, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden", border: "1px solid var(--line-work)", borderRadius: 9, background: "var(--work-2)", boxShadow: "inset 0 0 0 1px rgba(0,0,0,.25), 0 2px 6px rgba(0,0,0,.25)" }
+        : { flex: 1, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden", borderRadius: "var(--radius-card)", border: "1px solid var(--border-card)", background: "var(--surface-card)" }
+      }>
+        {/* Category pills */}
+        <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "var(--space-2)", padding: isFl ? "7px 12px" : "8px 14px", borderBottom: isFl ? "1px solid var(--line-work)" : "1px solid var(--border-soft)", background: isFl ? "linear-gradient(var(--work-3),var(--work-2))" : undefined, flexShrink: 0 }}>
+          <CatPill label="All" active={!filterCat} color={isFl ? "var(--ink-on-work)" : "var(--text-muted)"} onClick={() => setFilterCat("")} isFl={isFl} />
+          {ALL_MIDI_CATEGORIES.map((cat) => (
+            <CatPill key={cat} label={cat} active={filterCat === cat} color={CAT_COLOR[cat] ?? "var(--text-muted)"} onClick={() => setFilterCat(filterCat === cat ? "" : cat)} isFl={isFl} />
+          ))}
+        </div>
+
+        {/* Header */}
+        <div style={hdrStyle}>
+          <span style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Checkbox checked={allChecked} onChange={() => {
+              if (allChecked) setSelected(new Set());
+              else setSelected(new Set(filtered.map((c) => c.id)));
+            }} />
+          </span>
+          <span />
+          <span>{t.midi.colName}</span>
+          <span>{t.midi.colCategory}</span>
+          <span>{t.midi.colProject}</span>
+          <span style={{ textAlign: "right" }}>{t.midi.colDuration}</span>
+          <span />
+        </div>
+
+        {/* Rows (virtualized) */}
+        <div ref={scrollRef} onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)} style={{ overflowY: "auto", flex: 1, minHeight: 0 }}>
+          {topPad > 0 && <div style={{ height: topPad }} />}
+          {filtered.slice(visStart, visEnd + 1).map((clip, i) => (
+            <MidiRow
+              key={clip.id}
+              clip={clip}
+              cols={cols}
+              rowH={ROW_H}
+              zebra={(visStart + i) % 2 === 1}
+              selected={selected.has(clip.id)}
+              isFl={isFl}
+              onToggle={() => setSelected((p) => { const n = new Set(p); n.has(clip.id) ? n.delete(clip.id) : n.add(clip.id); return n; })}
+              onDownload={() => handleDownload(clip)}
+              onCategoryChange={(cat) => handleCategoryChange(clip.id, cat)}
+            />
+          ))}
+          {botPad > 0 && <div style={{ height: botPad }} />}
+          {filtered.length === 0 && (
+            <div style={{ padding: "40px 0", textAlign: "center", color: isFl ? "var(--ink-on-work-dim)" : "var(--text-faint)", fontSize: "var(--fs-sm)" }}>
+              {t.common.nothingFound}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Bottom bar ── */}
+      {selected.size > 0 ? (
+        isFl ? (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 14px", height: 42, background: "linear-gradient(var(--work-2),var(--work-3))", borderTop: "1px solid var(--line-work)", flexShrink: 0, gap: 10 }}>
+            <span style={{ font: "400 12px var(--font-mono)", color: "var(--accent)" }}>{filtered.length} clips · {selected.size} {t.samples.selCount}</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {midiOutputDir && <span className="mono" style={{ fontSize: 11, color: "var(--ink-on-work-dim)", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{midiOutputDir}</span>}
+              <button onClick={() => pickFolder().then((d) => { if (d) void updateSettings({ midiOutputDir: d }); })} style={{ display: "flex", alignItems: "center", gap: 5, background: "none", border: "none", cursor: "pointer", font: "600 12px var(--font-sans)", color: "var(--ink-on-work)" }}><Icons.Folder width={13} height={13} />{t.midi.outputDirPick}</button>
+              <input value={packName} onChange={(e) => setPackName(e.target.value)} placeholder={t.midi.packNamePlaceholder} style={{ height: 26, padding: "0 8px", background: "var(--work-2)", border: "1px solid var(--line-work)", borderRadius: 5, color: "var(--ink-on-work)", font: "500 12px var(--font-sans)", outline: "none", width: 140 }} />
+              <button onClick={handlePack} style={{ display: "flex", alignItems: "center", gap: 6, height: 28, padding: "0 12px", background: "linear-gradient(var(--btn-hi),var(--btn))", border: "1px solid var(--chrome-lo)", borderRadius: 6, color: "var(--ink)", font: "600 12px var(--font-sans)", cursor: "pointer", boxShadow: "inset 0 1px 0 rgba(255,255,255,.5)" }}><Icons.Zip width={13} height={13} />{t.midi.packSelected} ({selected.size})</button>
+              <button onClick={() => setSelected(new Set())} style={{ background: "none", border: "none", cursor: "pointer", font: "600 12px var(--font-sans)", color: "var(--ink-on-work-dim)" }}>{t.samples.clearSel}</button>
+            </div>
+          </div>
+        ) : (
+          <Card padding={0} style={{ flexShrink: 0 }}>
+            <div style={{ padding: "10px 16px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+              <span style={{ fontSize: "var(--fs-sm)", color: "var(--accent)", fontWeight: "var(--fw-semibold)" as any }}>{selected.size} {t.samples.selCount}</span>
+              <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>{t.samples.clearSel}</Button>
+              <Button variant="ghost" size="sm" onClick={() => setSelected(new Set(filtered.map((c) => c.id)))}>{t.samples.selectAll}</Button>
+              <div style={{ flex: 1 }} />
+              <Button variant="secondary" size="sm" icon={<Icons.Folder />} onClick={() => pickFolder().then((d) => { if (d) void updateSettings({ midiOutputDir: d }); })}>{t.midi.outputDirPick}</Button>
+              <Input placeholder={t.midi.packNamePlaceholder} value={packName} onChange={(e) => setPackName(e.target.value)} style={{ width: 160 }} />
+              <Button variant="primary" size="sm" icon={<Icons.Zip />} onClick={handlePack}>{t.midi.packSelected} ({selected.size})</Button>
+            </div>
+          </Card>
+        )
+      ) : (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: isFl ? "0 14px" : "4px 12px", height: isFl ? 42 : "auto", background: isFl ? "linear-gradient(var(--work-2),var(--work-3))" : "transparent", borderTop: isFl ? "1px solid var(--line-work)" : "none", flexShrink: 0 }}>
+          <span style={{ fontSize: isFl ? 12 : "var(--fs-sm)", fontFamily: isFl ? "var(--font-mono)" : undefined, color: isFl ? "var(--ink-on-work-dim)" : "var(--text-faint)" }}>{filtered.length} clips</span>
+          <Button variant="ghost" size="sm" onClick={() => setSelected(new Set(filtered.map((c) => c.id)))}>{t.samples.selectAll}</Button>
+        </div>
+      )}
+
+      {donePath && (
+        <div style={{ padding: "10px 14px", borderRadius: "var(--radius-md)", background: "color-mix(in srgb, var(--positive) 14%, transparent)", flexShrink: 0 }}>
+          <span style={{ fontSize: "var(--fs-sm)", color: "var(--positive)", fontWeight: "var(--fw-semibold)" as any }}>{t.midi.packDone}:</span>
+          <span className="mono" style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: 12, wordBreak: "break-all" }}>{donePath}</span>
+        </div>
+      )}
+      {dedupMsg && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 14px", borderRadius: "var(--radius-md)", background: "color-mix(in srgb, var(--accent) 12%, transparent)", flexShrink: 0 }}>
+          <span style={{ fontSize: "var(--fs-sm)", color: "var(--accent)", fontWeight: "var(--fw-semibold)" as any }}>{dedupMsg}</span>
+          <button onClick={() => setDedupMsg(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-faint)", fontSize: 16, lineHeight: 1 }}>×</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Category pill ─────────────────────────────────────────────────────────────
+function CatPill({ label, active, color, onClick, isFl }: { label: string; active: boolean; color: string; onClick: () => void; isFl: boolean }) {
+  const [hov, setHov] = React.useState(false);
+  return (
+    <button onClick={onClick} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)} style={{
+      padding: isFl ? "2px 9px" : "3px 11px", borderRadius: "var(--radius-pill)",
+      border: active ? `1.5px solid ${color}` : isFl ? "1.5px solid rgba(255,255,255,.12)" : "1.5px solid var(--border-medium)",
+      background: active ? `color-mix(in srgb, ${color} 18%, transparent)` : hov ? (isFl ? "rgba(255,255,255,.06)" : "var(--surface-3)") : "transparent",
+      color: active ? color : isFl ? "var(--ink-on-work-dim)" : "var(--text-muted)",
+      fontSize: isFl ? 11 : "var(--fs-sm)", fontFamily: "var(--font-sans)", fontWeight: active ? 600 : 400,
+      cursor: "pointer", transition: "all 100ms", lineHeight: 1,
+    }}>{label}</button>
+  );
+}
+
+// ── Category badge ────────────────────────────────────────────────────────────
+function CatBadge({ cat, overridden }: { cat: string; overridden?: boolean }) {
+  return (
+    <span style={{ color: CAT_COLOR[cat] ?? "var(--cat-unsorted)", background: CAT_BG[cat] ?? "var(--cat-unsorted-bg)", fontWeight: 500, fontSize: "var(--fs-caption)", letterSpacing: "var(--ls-label)", textTransform: "uppercase", padding: "2px 7px", borderRadius: "var(--radius-pill)", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 4 }}>
+      {cat}
+      {overridden && <span style={{ width: 5, height: 5, borderRadius: "50%", background: CAT_COLOR[cat], opacity: 0.7, flexShrink: 0 }} />}
+    </span>
+  );
+}
+
+// ── Inline mini piano roll ────────────────────────────────────────────────────
+function MiniRoll({ notes, durationTicks, ticksPerBeat, bpm, playheadSec, isFl, totalSec, onSeek }: {
+  notes: MidiNote[];
+  durationTicks: number;
+  ticksPerBeat: number;
+  bpm: number;
+  playheadSec: number;
+  isFl: boolean;
+  totalSec?: number;
+  onSeek?: (sec: number) => void;
+}) {
+  const canvasRef = React.useRef<HTMLCanvasElement>(null);
+  const H = isFl ? 28 : 32;
+
+  React.useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const dpr = window.devicePixelRatio || 1;
+    const W = canvas.offsetWidth;
+    if (!W) return;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const root = getComputedStyle(document.documentElement);
+    const accent = root.getPropertyValue("--accent").trim() || "#c87941";
+    const bg = isFl ? "transparent" : "transparent";
+    const gridLine = isFl ? "rgba(255,255,255,.05)" : "rgba(255,255,255,.06)";
+
+    ctx.clearRect(0, 0, W * dpr, H * dpr);
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W * dpr, H * dpr);
+
+    if (!notes.length) return;
+
+    const totalTicks = durationTicks || notes.reduce((m, n) => Math.max(m, n.tick + n.durationTicks), 0) || 1;
+    let minP = 127, maxP = 0;
+    for (const n of notes) { if (n.pitch < minP) minP = n.pitch; if (n.pitch > maxP) maxP = n.pitch; }
+    minP = Math.max(0, minP - 1); maxP = Math.min(127, maxP + 1);
+    const pitchRange = maxP - minP + 1;
+    const noteH = Math.max(1.5 * dpr, (H * dpr) / pitchRange);
+
+    // grid lines at C notes
+    ctx.strokeStyle = gridLine; ctx.lineWidth = dpr;
+    for (let p = minP; p <= maxP; p++) {
+      if (p % 12 === 0) {
+        const y = H * dpr - ((p - minP + 1) / pitchRange) * H * dpr + noteH / 2;
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W * dpr, y); ctx.stroke();
+      }
+    }
+
+    // notes
+    for (const n of notes) {
+      const x = (n.tick / totalTicks) * W * dpr;
+      const w = Math.max(1.5 * dpr, (n.durationTicks / totalTicks) * W * dpr - dpr * 0.5);
+      const y = H * dpr - ((n.pitch - minP + 1) / pitchRange) * H * dpr;
+      ctx.globalAlpha = 0.4 + 0.6 * (n.velocity / 127);
+      ctx.fillStyle = accent;
+      ctx.fillRect(x, y, w, noteH - dpr * 0.5);
+    }
+    ctx.globalAlpha = 1;
+
+    // playhead
+    if (playheadSec > 0 && ticksPerBeat > 0 && bpm > 0) {
+      const playTick = (playheadSec * ticksPerBeat * bpm) / 60;
+      if (playTick > 0 && playTick < totalTicks) {
+        const x = (playTick / totalTicks) * W * dpr;
+        ctx.strokeStyle = "#fff"; ctx.globalAlpha = 0.9; ctx.lineWidth = 1.5 * dpr;
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H * dpr); ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+    }
+  }, [notes, durationTicks, ticksPerBeat, bpm, playheadSec, isFl, H]);
+
+  const handleSeek = React.useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!onSeek || !totalSec) return;
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const frac = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    onSeek(frac * totalSec);
+  }, [onSeek, totalSec]);
+
+  return (
+    <div
+      style={{ width: "100%", height: H, borderRadius: 3, overflow: "hidden", cursor: onSeek ? "pointer" : undefined }}
+      onClick={handleSeek}
+    >
+      <canvas ref={canvasRef} style={{ display: "block", width: "100%", height: H }} />
+    </div>
+  );
+}
+
+// ── MIDI row ──────────────────────────────────────────────────────────────────
+function MidiRow({ clip, cols, rowH, zebra, selected, isFl, onToggle, onDownload, onCategoryChange }: {
+  clip: MidiClip; cols: string; rowH: number; zebra: boolean; selected: boolean; isFl: boolean;
+  onToggle: () => void; onDownload: () => void; onCategoryChange: (cat: string) => void;
+}) {
+  const t = useT();
+  const [hover, setHover] = React.useState(false);
+  const [editingCat, setEditingCat] = React.useState(false);
+  const [notesData, setNotesData] = React.useState<MidiNotesResult | null>(null);
+  const notesLoadedRef = React.useRef(false);
+
+  // Lazy-load notes on first render
+  React.useEffect(() => {
+    if (notesLoadedRef.current) return;
+    notesLoadedRef.current = true;
+    api.midiClipNotes(clip.id)
+      .then((res) => setNotesData(res))
+      .catch(() => { /* silent */ });
+  }, [clip.id]);
+
+  const hasSample = !!clip.samplePath;
+  const selfCut = clip.category !== "Melody";
+  const fallbackPiano = !hasSample && clip.category === "Melody";
+  const canPlay = hasSample || fallbackPiano;
+  const { isPlaying, playheadSec, totalSec, play, stop, seek } = useMidiPlayer(clip.id, notesData, hasSample, selfCut, fallbackPiano);
+
+  const rowBg = isFl
+    ? selected ? "rgba(255,138,60,.13)" : isPlaying ? "rgba(255,138,60,.06)" : hover ? "rgba(255,255,255,.035)" : zebra ? "transparent" : "transparent"
+    : isPlaying ? "var(--accent-soft)" : selected ? "var(--accent-softer)" : hover ? "var(--row-hover)" : zebra ? "var(--row-zebra)" : "transparent";
+
+  const boxShadow = isFl && (selected || isPlaying) ? "inset 3px 0 0 var(--accent)" : undefined;
+
+  return (
+    <div
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{ display: "grid", gridTemplateColumns: cols, alignItems: "center", gap: COL_GAP, height: rowH, padding: isFl ? "6px 12px" : "6px 14px", borderBottom: isFl ? "1px solid var(--line-work)" : undefined, background: rowBg, boxShadow, transition: isFl ? undefined : "background 100ms" }}
+    >
+      {/* Checkbox */}
+      <span onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <Checkbox checked={selected} onChange={onToggle} />
+      </span>
+
+      {/* Play button */}
+      <span onClick={(e) => e.stopPropagation()}>
+        {isFl ? (
+          <FlPlayBtn playing={isPlaying} disabled={!canPlay} onClick={() => isPlaying ? stop() : play()} />
+        ) : (
+          <PlayButton playing={isPlaying} size={32} onClick={() => isPlaying ? stop() : play()} style={{ opacity: canPlay ? 1 : 0.35, cursor: canPlay ? "pointer" : "not-allowed" }} />
+        )}
+      </span>
+
+      {/* Name + inline piano roll */}
+      <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: isFl ? 4 : 4 }}>
+        <span style={{ fontSize: isFl ? "13.5px" : "var(--fs-body)", color: isFl ? "var(--ink-on-work)" : "var(--text-body)", fontWeight: isFl ? 600 : ("var(--fw-medium)" as any), fontFamily: isFl ? "var(--font-sans)" : undefined, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {soundName(clip)}
+          {clip.patternName && (
+            <span style={{ fontWeight: 400, fontSize: isFl ? 11 : "var(--fs-caption)", color: isFl ? "var(--ink-on-work-dim)" : "var(--text-faint)", marginLeft: 6 }}>
+              {clip.patternName}
+            </span>
+          )}
+        </span>
+        {notesData ? (
+          <MiniRoll
+            notes={notesData.notes}
+            durationTicks={notesData.durationTicks}
+            ticksPerBeat={notesData.ticksPerBeat}
+            bpm={notesData.bpm}
+            playheadSec={playheadSec}
+            isFl={isFl}
+            totalSec={canPlay ? totalSec : undefined}
+            onSeek={canPlay ? seek : undefined}
+          />
+        ) : (
+          <div style={{ height: isFl ? 28 : 32, borderRadius: 3, background: isFl ? "rgba(255,255,255,.04)" : "var(--surface-3)", opacity: 0.5 }} />
+        )}
+      </div>
+
+      {/* Category */}
+      <span onClick={(e) => e.stopPropagation()}>
+        {editingCat ? (
+          <select autoFocus value={clip.category} onChange={(e) => { onCategoryChange(e.target.value); setEditingCat(false); }} onBlur={() => setEditingCat(false)}
+            style={{ height: 24, padding: "0 6px", background: "var(--surface-input)", color: "var(--text-body)", border: "1px solid var(--accent)", borderRadius: "var(--radius-sm)", fontFamily: "var(--font-sans)", fontSize: "var(--fs-caption)", cursor: "pointer", outline: "none" }}>
+            {ALL_MIDI_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        ) : (
+          <span onClick={() => setEditingCat(true)} title="Click to change" style={{ cursor: "pointer" }}>
+            <CatBadge cat={clip.category} overridden={clip.categoryOverride} />
+          </span>
+        )}
+      </span>
+
+      {/* Project */}
+      <span style={{ fontSize: isFl ? 12 : "var(--fs-sm)", color: isFl ? "var(--ink-on-work-dim)" : "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {clip.sourceName || clip.projectName}
+      </span>
+
+      {/* Duration + BPM */}
+      <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontSize: isFl ? 12 : "var(--fs-sm)", color: isFl ? "var(--ink-on-work-dim)" : "var(--text-muted)" }}>
+        <span style={{ display: "block" }}>{clip.durationSec > 0 ? formatDuration(clip.durationSec) : "—"}</span>
+        {clip.bpm > 0 && <span style={{ fontSize: "var(--fs-caption)", color: isFl ? "rgba(255,255,255,.35)" : "var(--text-faint)" }}>{Math.round(clip.bpm)} BPM</span>}
+      </span>
+
+      {/* Download */}
+      <span onClick={(e) => { e.stopPropagation(); onDownload(); }} style={{ display: "flex", justifyContent: "flex-end" }}>
+        <button title={t.midi.downloadOne} style={{ background: "none", border: "none", cursor: "pointer", color: hover ? "var(--accent)" : isFl ? "var(--ink-on-work-dim)" : "var(--text-faint)", padding: 6, borderRadius: "var(--radius-sm)", display: "flex", alignItems: "center", transition: "color 100ms" }}>
+          <Icons.Download />
+        </button>
+      </span>
+    </div>
+  );
+}
+
+// ── FL-style play button (matches SoundTable's FlPlayBtn) ─────────────────────
+function FlPlayBtn({ playing, disabled, onClick }: { playing: boolean; disabled?: boolean; onClick: () => void }) {
+  const [hov, setHov] = React.useState(false);
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      disabled={disabled}
+      style={{
+        width: 26, height: 26, borderRadius: 5, border: "none", cursor: disabled ? "not-allowed" : "pointer",
+        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+        background: playing ? "var(--accent)" : hov && !disabled ? "rgba(255,255,255,.12)" : "rgba(255,255,255,.06)",
+        color: playing ? "#fff" : disabled ? "rgba(255,255,255,.2)" : "var(--ink-on-work)",
+        transition: "background 100ms",
+      }}
+    >
+      {playing
+        ? <span style={{ display: "block", width: 8, height: 8, background: "currentColor", borderRadius: 1 }} />
+        : <svg width="10" height="10" viewBox="0 0 10 10"><polygon points="2,1 9,5 2,9" fill="currentColor" /></svg>
+      }
+    </button>
+  );
+}

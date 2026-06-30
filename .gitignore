@@ -1,0 +1,39 @@
+# dependencies
+node_modules/
+frontend/node_modules/
+
+# builds
+frontend/dist/
+src-tauri/target/
+src-tauri/gen/
+
+# compiled Go sidecar (rebuild with scripts/build-sidecar.sh)
+src-tauri/binaries/*
+!src-tauri/binaries/.gitkeep
+
+# Go
+backend/vendor/
+
+# Go build artifacts in source tree
+backend/*.exe
+backend/cmd/**/*.exe
+
+# local data / runtime
+*.db
+*.db-shm
+*.db-wal
+/tmp/
+
+# design-sync — staged scripts and generated output (durable: .design-sync/{config.json,NOTES.md,conventions.md,previews/,overrides/})
+.ds-sync/
+ds-bundle/
+.design-sync/.cache/
+.design-sync/learnings/
+.design-sync/node_modules
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log
