@@ -148,7 +148,7 @@ func (s *MidiExtractService) Extract(ctx context.Context, req domain.MidiExtract
 		log.Printf("[midi] parsed %q: ppq=%d bpm=%.1f channels=%d notes=%d",
 			filepath.Base(entry.path), proj.PPQ, proj.BPM, len(proj.Channels), len(proj.Notes))
 
-		clips := s.processProject(proj, runDir, entry.sourceType, entry.sourceName)
+		clips := s.processProject(proj, runDir, entry.sourceType, entry.sourceName, req.IgnoreEmptySamplers)
 		log.Printf("[midi] %q → %d clips", filepath.Base(entry.path), len(clips))
 		newClips = append(newClips, clips...)
 	}
@@ -163,8 +163,9 @@ func (s *MidiExtractService) Extract(ctx context.Context, req domain.MidiExtract
 
 // processProject группирует ноты проекта по (pattern, rackChan) и генерирует .mid.
 // srcType и srcName — тип и отображаемое имя источника (zip-архив или flp-файл).
-// Каналы без загруженного звука и без плагина (IsEmptySampler) всегда пропускаются.
-func (s *MidiExtractService) processProject(proj *domain.Project, outDir, srcType, srcName string) []*domain.MidiClip {
+// ignoreEmpty=true — каналы без загруженного звука и без плагина (IsEmptySampler)
+// пропускаются (так шлёт UI по умолчанию); false — включаются все группы нот.
+func (s *MidiExtractService) processProject(proj *domain.Project, outDir, srcType, srcName string, ignoreEmpty bool) []*domain.MidiClip {
 	if len(proj.Notes) == 0 {
 		return nil
 	}
@@ -216,7 +217,7 @@ func (s *MidiExtractService) processProject(proj *domain.Project, outDir, srcTyp
 
 		// Пропускаем пустые сэмплеры: канал без загруженного звука и без плагина.
 		// Сэмплер со звуком (808, снэйр, хэт…) и плагины (Kontakt, Serum) — проходят.
-		if ch.IsEmptySampler {
+		if ignoreEmpty && ch.IsEmptySampler {
 			skippedEmpty++
 			continue
 		}

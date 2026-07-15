@@ -24,6 +24,27 @@ type Settings struct {
 	GPU            bool   `json:"gpu"`            // reserved for future ML acceleration
 	AutoUpdate     bool   `json:"autoUpdate"`     // check for updates on launch
 	BackupOnExit   bool   `json:"backupOnExit"`   // copy the DB on close
+
+	// YouTube publishing (TunesToTube-style): OAuth-креды пользователя из
+	// Google Cloud и дефолты формы загрузки, чтобы публикация была в пару кликов.
+	FfmpegPath      string `json:"ffmpegPath"`      // путь к ffmpeg ("" = авто-поиск)
+	YtClientID      string `json:"ytClientId"`      // OAuth client id (Desktop app)
+	YtClientSecret  string `json:"ytClientSecret"`  // OAuth client secret
+	YtNickname      string `json:"ytNickname"`      // ник/тег продюсера: подставляется как {nick} и вычищается из {name}
+	YtNoTextOverlay bool   `json:"ytNoTextOverlay"` // инвертирован: false = вшивать текст (название+ник) в кадр (вкл по умолчанию)
+	YtFont          string `json:"ytFont"`          // шрифт наложения: ключ (arial, impact…) или путь к .ttf; "" = дефолт
+	// Память правок распознавания авторов: токен(lowercase) → каноничное имя;
+	// пустая строка = «это не автор». Парсинг на фронте, бэкенд только хранит.
+	YtAuthorAliases map[string]string `json:"ytAuthorAliases"`
+	YtDefaultImage  string `json:"ytDefaultImage"`  // обложка по умолчанию
+	YtTitleTemplate string `json:"ytTitleTemplate"` // активный шаблон названия: {name} {type} {bpm} {key} {nick}
+	// Сохранённые пресеты шаблонов названия — переключаются в диалоге загрузки.
+	YtTitleTemplates []string `json:"ytTitleTemplates"`
+	YtDescription    string   `json:"ytDescription"` // активное описание: те же подстановки, что в названии
+	// Сохранённые пресеты описаний — переключаются в диалоге загрузки.
+	YtDescTemplates []string `json:"ytDescTemplates"`
+	YtTags          string   `json:"ytTags"`    // теги по умолчанию, через запятую
+	YtPrivacy       string   `json:"ytPrivacy"` // public | unlisted | private
 }
 
 // Defaults returns the baseline configuration.
@@ -39,8 +60,35 @@ func Defaults() Settings {
 		GPU:            false,
 		AutoUpdate:     true,
 		BackupOnExit:   false,
+
+		YtTitleTemplate: `[FREE] {type} Type Beat "{name}" | {bpm} BPM {key}`,
+		YtTitleTemplates: []string{
+			`[FREE] {type} Type Beat "{name}" | {bpm} BPM {key}`,
+			`{name} | {type} type beat {bpm}bpm {key}`,
+			`[FREE] {type} x {nick} Type Beat "{name}"`,
+			`{type} type beat — {name}`,
+		},
+		YtDescription: defaultDescription,
+		YtDescTemplates: []string{
+			defaultDescription,
+		},
+		YtTags:    "type beat, instrumental, beat, free type beat",
+		YtPrivacy: "public",
 	}
 }
+
+// defaultDescription — готовый шаблон описания для тайп-бита. Подстановки те же,
+// что и в названии, плюс {nick} — тег продюсера из настроек.
+const defaultDescription = `{type} Type Beat "{name}"
+
+Prod. {nick}
+{bpm} BPM | Key: {key}
+
+Free for non-profit use only — you MUST credit (prod. {nick}) in your title.
+For profit use / exclusive rights: contact me.
+
+{type} type beat, {name} type beat, {bpm} bpm, {key}
+#typebeat #{nick}`
 
 // Store reads and writes the settings file under a mutex.
 type Store struct {
@@ -92,6 +140,11 @@ func (s *Store) persist() error {
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
 		return err
 	}
+	// Прошлую версию храним рядом (.bak): единственный шанс восстановить
+	// поля вроде OAuth-ключей, если их затрёт кривой PUT.
+	if prev, err := os.ReadFile(s.path); err == nil {
+		_ = os.WriteFile(s.path+".bak", prev, 0o644)
+	}
 	data, err := json.MarshalIndent(s.cur, "", "  ")
 	if err != nil {
 		return err
@@ -117,6 +170,22 @@ func mergeDefaults(in Settings) Settings {
 	}
 	if in.DedupThreshold <= 0 {
 		in.DedupThreshold = d.DedupThreshold
+	}
+	if in.YtTitleTemplate == "" {
+		in.YtTitleTemplate = d.YtTitleTemplate
+	}
+	// Пустой список пресетов не оставляем — дропдауну в диалоге нужен выбор.
+	if len(in.YtTitleTemplates) == 0 {
+		in.YtTitleTemplates = d.YtTitleTemplates
+	}
+	if len(in.YtDescTemplates) == 0 {
+		in.YtDescTemplates = d.YtDescTemplates
+	}
+	if in.YtAuthorAliases == nil {
+		in.YtAuthorAliases = map[string]string{}
+	}
+	if in.YtPrivacy == "" {
+		in.YtPrivacy = d.YtPrivacy
 	}
 	return in
 }

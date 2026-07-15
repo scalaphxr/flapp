@@ -28,6 +28,8 @@ type Services struct {
 	Analytics   *usecase.AnalyticsService
 	Smart       *usecase.SmartSearchService
 	MidiExtract *usecase.MidiExtractService
+	YouTube     *usecase.YouTubeService
+	Covers      *usecase.CoverService
 	Projects    domain.ProjectRepository
 	Collections domain.CollectionRepository
 	Jobs        domain.JobQueue
@@ -115,6 +117,20 @@ func (s *Server) routes() {
 	// Settings.
 	m.HandleFunc("GET /api/settings", s.handleSettingsGet)
 	m.HandleFunc("PUT /api/settings", s.handleSettingsPut)
+
+	// YouTube publishing.
+	m.HandleFunc("GET /api/youtube/status", s.handleYouTubeStatus)
+	m.HandleFunc("POST /api/youtube/auth", s.handleYouTubeAuth)
+	m.HandleFunc("POST /api/youtube/disconnect", s.handleYouTubeDisconnect)
+	m.HandleFunc("GET /api/youtube/ffmpeg", s.handleYouTubeFfmpeg)
+	m.HandleFunc("POST /api/youtube/ffmpeg/download", s.handleYouTubeFfmpegDownload)
+	m.HandleFunc("POST /api/youtube/upload", s.handleYouTubeUpload)
+	m.HandleFunc("POST /api/youtube/preview", s.handleYouTubePreview)
+	m.HandleFunc("GET /api/youtube/tags", s.handleYouTubeTags)
+
+	// Cover images (Pinterest search + local download for the renderer).
+	m.HandleFunc("GET /api/covers/search", s.handleCoversSearch)
+	m.HandleFunc("POST /api/covers/download", s.handleCoversDownload)
 
 	// MIDI extraction.
 	m.HandleFunc("POST /api/midi/extract", s.handleMidiExtract)

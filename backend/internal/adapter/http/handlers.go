@@ -73,6 +73,20 @@ func (s *Server) handleSamplesSearch(w http.ResponseWriter, r *http.Request) {
 		Limit:      queryInt(r, "limit", 100),
 		Offset:     queryInt(r, "offset", 0),
 	}
+	// Recognise RU/EN mood & instrument words in free text (e.g. "тёмные 808",
+	// "тёплый бас") the same way Smart Search does, so the plain search box
+	// benefits too — without this, a Cyrillic query never matches anything
+	// (sample names/tags are stored in English), since it only ran behind the
+	// separate opt-in "Smart Search" wand button. Only applies when the
+	// caller hasn't already set structured filters explicitly.
+	if q.Text != "" && len(q.Categories) == 0 && len(q.Tags) == 0 && q.MinBPM == 0 && q.MaxBPM == 0 {
+		parsed, _ := s.svc.Smart.Parse(q.Text)
+		q.Text = parsed.Text
+		q.Categories = parsed.Categories
+		q.Tags = parsed.Tags
+		q.MinBPM = parsed.MinBPM
+		q.MaxBPM = parsed.MaxBPM
+	}
 	res, err := s.svc.Library.Search(r.Context(), q)
 	if err != nil {
 		writeError(w, err)

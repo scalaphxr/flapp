@@ -1,16 +1,19 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Permissions for the main window: run the Go backend sidecar, open native file/folder pickers, and receive drag-drop + backend-ready events.",
+  "description": "Permissions for the main window: run the Go backend sidecar, open native file/folder pickers, receive drag-drop + backend-ready events, and start native file drag-out.",
   "windows": ["main"],
   "permissions": [
     "core:default",
+    "drag:default",
     "core:event:default",
     "core:window:default",
     "core:window:allow-close",
     "core:window:allow-minimize",
     "core:window:allow-toggle-maximize",
     "core:window:allow-start-dragging",
+    "core:window:allow-set-focus",
+    "core:window:allow-unminimize",
     "core:webview:default",
     "core:app:default",
     "core:path:default",
@@ -19,6 +22,7 @@
     "shell:allow-execute",
     "shell:allow-spawn",
     "shell:allow-kill",
+    "shell:allow-open",
     {
       "identifier": "shell:allow-execute",
       "allow": [

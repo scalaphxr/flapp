@@ -91,9 +91,20 @@ func main() {
 	accuracy, cm := evaluate(model, testFeats)
 	model.TestAccuracy = accuracy
 
+	fmt.Println("\n=== Статистическая модель (ClassifyModel / ModelClassifier) ===")
 	printConfusionMatrix(cm)
 	fmt.Printf("\n→ Общая точность на тест-выборке: %.1f%% (%d/%d)\n",
 		accuracy*100, int(accuracy*float64(len(testFeats))), len(testFeats))
+
+	// Тот же тестовый набор (те же файлы, та же разметка) прогоняем через
+	// действующий в приложении classify.Classifier (rules.go/classifier.go),
+	// чтобы видеть точность именно того кода, который реально работает в
+	// рантайме — ClassifyModel сейчас не подключена к flapp-core.
+	hwAccuracy, hwCM := evaluateHandWritten(testFeats)
+	fmt.Println("\n=== Ручной классификатор (classify.Classifier — то, что реально работает в приложении) ===")
+	printConfusionMatrix(hwCM)
+	fmt.Printf("\n→ Общая точность на тест-выборке: %.1f%% (%d/%d)\n",
+		hwAccuracy*100, int(hwAccuracy*float64(len(testFeats))), len(testFeats))
 
 	if err := classify.SaveModel(model, *out); err != nil {
 		fmt.Fprintf(os.Stderr, "ошибка записи модели: %v\n", err)
@@ -541,6 +552,34 @@ func evaluate(m *classify.ClassifyModel, testFiles []analyzedFile) (accuracy flo
 		predC := r.Category
 		cm.matrix[trueC][predC]++
 		if trueC == predC {
+			correct++
+		}
+	}
+	if len(testFiles) > 0 {
+		accuracy = float64(correct) / float64(len(testFiles))
+	}
+	return accuracy, cm
+}
+
+// evaluateHandWritten scores classify.New() (the Classifier actually wired
+// into flapp-core, backed by rules.go/classifier.go) against the same
+// labeled test set used for the statistical model, so the two are directly
+// comparable on identical data.
+func evaluateHandWritten(testFiles []analyzedFile) (accuracy float64, cm confusionMatrix) {
+	c := classify.New()
+	cats := sortedCats()
+	cm.cats = cats
+	cm.matrix = make(map[string]map[string]int)
+	for _, cat := range cats {
+		cm.matrix[cat] = make(map[string]int)
+	}
+
+	correct := 0
+	for _, af := range testFiles {
+		predC, _ := c.Classify(af.lf.name, af.lf.relPath, af.features)
+		trueC := af.lf.category
+		cm.matrix[trueC][string(predC)]++
+		if trueC == string(predC) {
 			correct++
 		}
 	}

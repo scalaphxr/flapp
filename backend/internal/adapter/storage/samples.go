@@ -395,18 +395,20 @@ func (r *SampleRepo) Search(ctx context.Context, q domain.SearchQuery) ([]*domai
 	}
 
 	// Page query.
+	orderBy, orderArgs := sampleOrderBy(q)
 	pageSQL := "SELECT " + qualify(sampleColumns) + " " + from
 	if where != "" {
 		pageSQL += " WHERE " + where
 	}
-	pageSQL += " ORDER BY " + sampleOrderBy(q)
+	pageSQL += " ORDER BY " + orderBy
 	limit := q.Limit
 	if limit <= 0 {
 		limit = 100
 	}
 	pageSQL += fmt.Sprintf(" LIMIT %d OFFSET %d", limit, max0(q.Offset))
 
-	rows, err := r.db.QueryContext(ctx, pageSQL, args...)
+	pageArgs := append(append([]any{}, args...), orderArgs...)
+	rows, err := r.db.QueryContext(ctx, pageSQL, pageArgs...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -455,15 +457,19 @@ func buildSampleWhere(q domain.SearchQuery) (string, []any) {
 		clauses = append(clauses, "samples.origin IN ("+strings.Join(ph, ",")+")")
 	}
 	if len(q.Tags) > 0 {
+		// ANY-match, not ALL: tags describe independent characteristics (mood,
+		// texture, genre…), and a sample rarely earns every one of several
+		// requested tags at once. Requiring all of them made multi-tag/smart
+		// searches (e.g. "dark aggressive 808") return zero results even when
+		// good partial matches existed. sampleOrderBy ranks fuller matches
+		// first to compensate for the loosened filter.
 		ph := make([]string, len(q.Tags))
 		for i, tg := range q.Tags {
 			ph[i] = "?"
 			args = append(args, tg)
 		}
 		clauses = append(clauses,
-			"samples.id IN (SELECT sample_id FROM sample_tags WHERE tag IN ("+
-				strings.Join(ph, ",")+") GROUP BY sample_id HAVING COUNT(DISTINCT tag)=?)")
-		args = append(args, len(q.Tags))
+			"samples.id IN (SELECT sample_id FROM sample_tags WHERE tag IN ("+strings.Join(ph, ",")+"))")
 	}
 	if q.MinBPM > 0 {
 		clauses = append(clauses, "samples.bpm >= ?")
@@ -492,7 +498,8 @@ func buildSampleWhere(q domain.SearchQuery) (string, []any) {
 }
 
 // sampleOrderBy maps the sort/order fields to a safe ORDER BY expression.
-func sampleOrderBy(q domain.SearchQuery) string {
+// Returns the ORDER BY clause and any placeholder args it needs.
+func sampleOrderBy(q domain.SearchQuery) (string, []any) {
 	col := "samples.added_at"
 	switch strings.ToLower(q.Sort) {
 	case "name":
@@ -510,7 +517,24 @@ func sampleOrderBy(q domain.SearchQuery) string {
 	if strings.EqualFold(q.Order, "asc") {
 		dir = "ASC"
 	}
-	return col + " " + dir + ", samples.id " + dir
+
+	// Tag filtering is ANY-match (see buildSampleWhere), so when more than one
+	// tag was requested, rank samples that matched more of them first —
+	// otherwise a single-tag match could outrank a full match on recency/use
+	// alone, which reads as "search relevance is broken".
+	var prefix string
+	var args []any
+	if len(q.Tags) > 1 {
+		ph := make([]string, len(q.Tags))
+		for i, tg := range q.Tags {
+			ph[i] = "?"
+			args = append(args, tg)
+		}
+		prefix = "(SELECT COUNT(DISTINCT tag) FROM sample_tags WHERE sample_tags.sample_id = samples.id AND tag IN (" +
+			strings.Join(ph, ",") + ")) DESC, "
+	}
+
+	return prefix + col + " " + dir + ", samples.id " + dir, args
 }
 
 // SetCategory overwrites the sample's category (manual override).

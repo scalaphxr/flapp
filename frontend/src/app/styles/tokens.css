@@ -74,6 +74,74 @@
 }
 
 /* ============================================================
+   ТЕМА: Тёплая тёмная (warm-dark) — тёмная, но с коричнево-янтарным
+   подтоном вместо нейтрального серого (в отличие от "dark").
+   ============================================================ */
+[data-theme="warm-dark"] {
+  /* Фон и поверхности — тёмный кофейно-коричневый, не серый */
+  --bg-base:        #1A1512;
+  --bg-sunken:      #14100B;
+  --surface-1:      #211A15;
+  --surface-2:      #2A211A;
+  --surface-3:      #332822;
+  --surface-4:      #3A2E2604;
+  --surface-hover:  #332822;
+  --surface-active: #3A2E26;
+
+  /* Разделители */
+  --border-soft:    #2E2419;
+  --border-medium:  #3E3020;
+  --border-strong:  #4E3D28;
+
+  /* Текст — тёплые кремовые тона */
+  --text-strong:    #F5EEE5;
+  --text-body:      #E0D4C5;
+  --text-muted:     #A89880;
+  --text-faint:     #786852;
+  --text-on-accent: #1A1008;
+
+  /* Акцент — тот же коралловый, уже тёплый по своей природе */
+  --accent:         #E8845C;
+  --accent-hover:   #EE9168;
+  --accent-press:   #D9744D;
+  --accent-amber:   #F0A868;
+  --accent-soft:    #E8845C26;
+  --accent-softer:  #E8845C14;
+  --accent-ring:    #E8845C66;
+
+  /* Статусы */
+  --positive:       #7AB05A;
+  --warning:        #E0A455;
+  --danger:         #D9714E;
+
+  /* Категории — тот же набор, что и в "dark" (узнаваемость между темами) */
+  --cat-808:        #D98C6A;  --cat-808-bg:      #D98C6A24;
+  --cat-kick:       #E0926A;  --cat-kick-bg:     #E0926A24;
+  --cat-snare:      #E0A455;  --cat-snare-bg:    #E0A45524;
+  --cat-clap:       #D98E8E;  --cat-clap-bg:     #D98E8E24;
+  --cat-hihat:      #C7B36A;  --cat-hihat-bg:    #C7B36A24;
+  --cat-openhat:    #B6B97A;  --cat-openhat-bg:  #B6B97A24;
+  --cat-cymbal:     #CBBE8A;  --cat-cymbal-bg:   #CBBE8A24;
+  --cat-perc:       #A8B27A;  --cat-perc-bg:     #A8B27A24;
+  --cat-vox:        #C79BC4;  --cat-vox-bg:      #C79BC424;
+  --cat-bass:       #B79BD4;  --cat-bass-bg:     #B79BD424;
+  --cat-drumloop:   #C9A06A;  --cat-drumloop-bg: #C9A06A24;
+  --cat-fx:         #C98BA8;  --cat-fx-bg:       #C98BA824;
+  --cat-unsorted:   #9898A0;  --cat-unsorted-bg: #9898A020;
+
+  --row-zebra: #1F1712;
+
+  --shadow-sm:  0 1px 2px rgba(20, 12, 5, 0.40);
+  --shadow-md:  0 4px 16px rgba(20, 12, 5, 0.44);
+  --shadow-lg:  0 12px 32px rgba(20, 12, 5, 0.56);
+  --shadow-pop: 0 16px 48px rgba(20, 12, 5, 0.68);
+
+  --glow-accent:      0 0 0 1px var(--accent-ring), 0 8px 28px rgba(232, 132, 92, 0.24);
+  --glow-accent-soft: 0 0 40px rgba(232, 132, 92, 0.16);
+  --glow-primary-btn: 0 6px 20px rgba(232, 132, 92, 0.32);
+}
+
+/* ============================================================
    ТЕМА: Светлая (light) — тёплый кремовый фон, тёмный текст
    Акцент и категорийные теги затемнены для WCAG AA (≥4.5:1).
    ============================================================ */

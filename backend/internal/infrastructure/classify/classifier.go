@@ -17,14 +17,23 @@ func (c *Classifier) Classify(name, relPath string, f domain.AudioFeatures) (dom
 
 	// Signal 1: name-based multi-pass (folder, dash-prefix, abbreviations, BPM, keywords).
 	if cat, score, ok := ClassifyByName(name, relPath); ok {
-		// Melodic instrument names (synth, pad, stab…) on short one-shots are NOT loops.
-		// If audio is analyzed and duration is short, cross-check before committing to Loop.
+		// Melodic instrument names (synth, pad, bass, stab…) on one-shots are NOT loops.
+		// If audio is analyzed, cross-check before committing to Loop unless the name
+		// itself already confirms a loop (explicit "loop" word or a BPM tag).
 		if cat == domain.CatLoop && !hasLoopMarker(strings.ToLower(name+" "+relPath)) {
-			if f.Analyzed && f.DurationSeconds < 4.0 {
-				if audioCat, ok2 := classifyByAudio(f); ok2 {
+			// Short one-shot, OR a long sample with almost no onsets (e.g. a
+			// released 808/bass note with a multi-second tail) — duration alone
+			// mis-tags those as Loop, but a single onset is never a "repeating
+			// pattern". A real loop repeats (onsets > 2) regardless of length.
+			isOneShot := f.DurationSeconds < 4.0 || (f.OnsetCount > 0 && f.OnsetCount <= 2)
+			if f.Analyzed && isOneShot {
+				if audioCat, ok2 := classifyByAudio(f); ok2 && !audioCat.IsLoop() {
 					return audioCat, true
 				}
-				// Audio analyzed but ambiguous — short stab/one-shot → FX, not Loop.
+				if audioCat, ok2 := bestNonLoopAudioCategory(f); ok2 {
+					return audioCat, true
+				}
+				// Audio analyzed but ambiguous — one-shot → FX, not Loop.
 				return domain.CatFX, false
 			}
 		}
@@ -53,13 +62,14 @@ func (c *Classifier) Classify(name, relPath string, f domain.AudioFeatures) (dom
 		}
 	}
 
-	// Signal 4: duration heuristics (weak priors).
-	if f.DurationSeconds >= 4.0 {
-		scores[domain.CatLoop] += 2.0
-	}
-	if f.DurationSeconds >= 8.0 {
-		scores[domain.CatLoop] += 1.0
-	}
+	// (No separate top-level duration heuristic here: audioScores already adds
+	// its own dur>=4.0/dur>=8.0 → Loop bonus above when analysed with v2
+	// features, which is true for virtually all files today. A second,
+	// identical duration bonus here double-counted the same evidence and was
+	// confirmed (via a confusion-matrix run against a 66k-file real drumkit
+	// library) to be the main driver of 808/FX/Drum Loop samples with a long
+	// tail being over-classified as Loop. The "nothing scored at all" case is
+	// still covered by the duration-based fallback below.)
 
 	// Find winner.
 	var bestCat domain.Category
@@ -82,12 +92,42 @@ func (c *Classifier) Classify(name, relPath string, f domain.AudioFeatures) (dom
 }
 
 // hasLoopMarker reports whether the haystack contains an explicit indicator
-// that the file is a looping phrase rather than a one-shot.
+// that the file is a looping phrase rather than a one-shot: an explicit loop
+// word, or a BPM/[starter]/[phrase] tag (producers tag tempo on loopable
+// content, rarely on single hits).
 func hasLoopMarker(s string) bool {
-	return strings.Contains(s, "loop") ||
+	if strings.Contains(s, "loop") ||
 		strings.Contains(s, "fill") ||
 		strings.Contains(s, "groove") ||
-		strings.Contains(s, "phrase")
+		strings.Contains(s, "phrase") {
+		return true
+	}
+	isLoop, _ := detectLoopByPattern(s)
+	return isLoop
+}
+
+// bestNonLoopAudioCategory picks the highest-scoring category from the
+// signal-level audioScores heuristics, excluding Loop/Drum Loop. Used when a
+// name-based Loop guess has already been ruled out (short one-shot, or a long
+// sample with too few onsets to be a repeating pattern) so the fallback
+// mustn't re-derive Loop from duration alone the way the legacy
+// classifyByAudio does.
+func bestNonLoopAudioCategory(f domain.AudioFeatures) (domain.Category, bool) {
+	var best domain.Category
+	var bestScore float64
+	for cat, s := range audioScores(f) {
+		if cat.IsLoop() {
+			continue
+		}
+		if s > bestScore {
+			bestScore = s
+			best = cat
+		}
+	}
+	if best == "" || bestScore <= 0 {
+		return "", false
+	}
+	return best, true
 }
 
 // audioScores returns per-category scores from signal-level features.
@@ -127,7 +167,12 @@ func audioScores(f domain.AudioFeatures) map[domain.Category]float64 {
 	if highR > 0.5 {
 		add(domain.CatHiHat, 1.5)
 	}
-	if dur < 0.15 {
+	// Real-library duration medians: Hi-Hat 0.19s vs Open Hat 1.12s (P10 0.36s) —
+	// centroid/flatness/zcr are nearly identical between the two, so duration
+	// is the actual separating signal. 0.15 sat below the Hi-Hat median itself
+	// (missing over half of real Hi-Hats); 0.25 stays comfortably under Open
+	// Hat's P10.
+	if dur < 0.25 {
 		add(domain.CatHiHat, 2.0)
 	}
 	if decay > 0 && decay < 0.08 {
@@ -148,7 +193,7 @@ func audioScores(f domain.AudioFeatures) map[domain.Category]float64 {
 	if centroid > 5000 && dur > 0.5 && flat > 0 && flat > 0.3 {
 		add(domain.CatOpenHat, 1.5)
 	}
-	if dur < 0.15 {
+	if dur < 0.25 {
 		add(domain.CatOpenHat, -1.5)
 	}
 

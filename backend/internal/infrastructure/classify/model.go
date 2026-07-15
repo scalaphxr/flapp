@@ -175,28 +175,34 @@ func isAllDigits(s string) bool {
 // Приоритет: длинные совпадения проверяются первыми (в runtime обходим по длине убывая).
 var BaseFolderSynonyms = map[string]string{
 	// 808 / Sub Bass
+	// "bd" = TR-808 bass drum used as the 808 sub instrument (confirmed
+	// against real library data: every "BD" folder across multiple
+	// independent kits contains 808/sub content, e.g. "attack 808.wav",
+	// "808 bricks.wav", "bwheezySub.wav") — not a Kick abbreviation here.
 	"808": "808", "808s": "808", "sub": "808", "sub bass": "808",
-	"subbass": "808", "bass sub": "808",
+	"subbass": "808", "bass sub": "808", "bd": "808",
 
 	// Kick
 	"kick": "Kick", "kicks": "Kick", "kick drum": "Kick", "kickdrum": "Kick",
-	"bassdrum": "Kick", "bass drum": "Kick", "bd": "Kick",
+	"bassdrum": "Kick", "bass drum": "Kick",
 
 	// Snare
 	"snare": "Snare", "snares": "Snare", "snr": "Snare",
 
 	// Clap
 	"clap": "Clap", "claps": "Clap", "handclap": "Clap",
+	"rimshot": "Clap", "rimshots": "Clap", "rimz": "Clap",
+	"rims": "Clap", "rim": "Clap", "rim shots": "Clap",
 
 	// Hi-Hat (closed)
-	"hihat": "Hi-Hat", "hi-hat": "Hi-Hat", "hi hat": "Hi-Hat",
+	"hihat": "Hi-Hat", "hi-hat": "Hi-Hat", "hi hat": "Hi-Hat", "hi-hats": "Hi-Hat",
 	"hihats": "Hi-Hat", "hat": "Hi-Hat", "hats": "Hi-Hat",
 	"closed hat": "Hi-Hat", "closed hihat": "Hi-Hat",
 	"closed": "Hi-Hat",
 
 	// Open Hat / Cymbal
 	"open hat": "Open Hat", "openhat": "Open Hat", "open hats": "Open Hat",
-	"oh": "Open Hat", "open hi hat": "Open Hat",
+	"oh": "Open Hat", "open hi hat": "Open Hat", "op hat": "Open Hat",
 	"crash": "Open Hat", "ride": "Open Hat", "cymbal": "Open Hat",
 	"cymbals": "Open Hat",
 
@@ -216,7 +222,8 @@ var BaseFolderSynonyms = map[string]string{
 	"transition": "FX", "texture": "FX", "foley": "FX",
 
 	// Loop (melodic)
-	"loop": "Loop", "loops": "Loop", "melody loop": "Loop",
+	"loop": "Loop", "loops": "Loop", "loopkit": "Loop", "melody loop": "Loop",
+	"bell": "Loop", "bells": "Loop",
 
 	// Drum Loop
 	"drum loop": "Drum Loop", "drum loops": "Drum Loop",

@@ -12,6 +12,8 @@ const (
 	JobRename       JobType = "rename"        // batch rename files on disk
 	JobReanalyze    JobType = "reanalyze"     // recompute features/fingerprints
 	JobMidiExtract  JobType = "extract_midi"  // extract MIDI from FLP projects
+	JobYouTube      JobType = "youtube_upload"  // render still video + upload to YouTube
+	JobFfmpegFetch  JobType = "ffmpeg_download" // download a portable ffmpeg build
 )
 
 // JobStatus is the lifecycle state of a job.

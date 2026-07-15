@@ -205,4 +205,44 @@ export const api = {
   },
   // Производный кэш: .mid файлы + .zip паки. Не трогает library.db.
   cacheClear: () => request<import("./types").CacheStats>("/api/cache/clear", { method: "POST" }),
+
+  // YouTube publishing.
+  ytStatus: () => request<import("./types").YtStatus>("/api/youtube/status"),
+  ytAuth: () => request<{ authUrl: string }>("/api/youtube/auth", { method: "POST" }),
+  ytDisconnect: () => request<{ ok: boolean }>("/api/youtube/disconnect", { method: "POST" }),
+  ytFfmpeg: () => request<{ found: boolean; path: string }>("/api/youtube/ffmpeg"),
+  // Скачивает портативный ffmpeg в папку данных приложения (джоба с прогрессом).
+  ytFfmpegDownload: () => request<{ jobId: string }>("/api/youtube/ffmpeg/download", { method: "POST" }),
+  ytUpload: (body: {
+    audioPath: string;
+    imagePath: string;
+    title: string;
+    description: string;
+    tags: string[];
+    privacy: string;
+    overlay?: boolean;
+    overlayTitle?: string;
+    overlaySub?: string;
+    overlayFont?: string;
+  }) => request<{ jobId: string }>("/api/youtube/upload", { method: "POST", body: JSON.stringify(body) }),
+  // Рендерит короткий mp4-клип (без загрузки) с вшитым текстом — для превью видео.
+  ytPreview: (body: {
+    audioPath: string;
+    imagePath: string;
+    overlay?: boolean;
+    overlayTitle?: string;
+    overlaySub?: string;
+    overlayFont?: string;
+  }) => request<{ path: string }>("/api/youtube/preview", { method: "POST", body: JSON.stringify(body) }),
+  // Автоподбор тегов по тайп-артистам (шаблоны + подсказки поиска YouTube).
+  ytTags: (artists: string[]) =>
+    request<{ tags: string[] }>(`/api/youtube/tags?artists=${encodeURIComponent(artists.join(","))}`),
+
+  // Cover images (Pinterest search + local download for the renderer).
+  coversSearch: (q: string, limit = 40) =>
+    request<{ items: import("./types").CoverImage[] }>(
+      `/api/covers/search?q=${encodeURIComponent(q)}&limit=${limit}`
+    ),
+  coversDownload: (url: string) =>
+    request<{ path: string }>("/api/covers/download", { method: "POST", body: JSON.stringify({ url }) }),
 };

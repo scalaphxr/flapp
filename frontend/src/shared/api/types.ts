@@ -48,7 +48,8 @@ export type JobType =
   | "import_folder"
   | "rename"
   | "reanalyze"
-  | "extract_midi";
+  | "extract_midi"
+  | "youtube_upload";
 
 export type JobStatus =
   | "queued"
@@ -236,5 +237,37 @@ export interface Settings {
   gpu: boolean;
   autoUpdate: boolean;
   backupOnExit: boolean;
+
+  // Публикация на YouTube (механика TunesToTube).
+  ffmpegPath: string; // "" = авто-поиск
+  ytClientId: string;
+  ytClientSecret: string;
+  ytNickname: string; // ник/тег продюсера: {nick} + вычищается из {name}
+  ytNoTextOverlay: boolean; // инвертирован: false = вшивать название+ник в кадр
+  ytFont: string; // шрифт наложения: ключ (arial, impact…) или путь к .ttf
+  ytAuthorAliases: Record<string, string>; // память правок авторов: токен → имя ("" = не автор)
+  ytDefaultImage: string; // обложка по умолчанию
+  ytTitleTemplate: string; // активный шаблон: {name} {type} {bpm} {key} {nick}
+  ytTitleTemplates: string[]; // сохранённые пресеты шаблонов
+  ytDescription: string; // активное описание: те же подстановки, что в названии
+  ytDescTemplates: string[]; // сохранённые пресеты описаний
+  ytTags: string; // через запятую
+  ytPrivacy: string; // public | unlisted | private
+}
+
+// YtStatus mirrors GET /api/youtube/status.
+export interface YtStatus {
+  configured: boolean;
+  connected: boolean;
+  channelTitle: string;
+}
+
+// CoverImage mirrors one item of GET /api/covers/search (Pinterest pin).
+export interface CoverImage {
+  id: string;
+  thumb: string; // превью для сетки (~236px)
+  full: string; // полноразмерный URL — его скачивает /api/covers/download
+  width: number;
+  height: number;
 }
 

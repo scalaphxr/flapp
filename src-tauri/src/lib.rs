@@ -6,6 +6,7 @@
 // in Go and the React UI; this file only manages the child process lifecycle.
 
 mod analyzer;
+mod watcher;
 
 use std::sync::Mutex;
 
@@ -44,8 +45,10 @@ pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
+        // Нативный drag-out: перетаскивание файлов из приложения в DAW/проводник.
+        .plugin(tauri_plugin_drag::init())
         .manage(Backend::default())
-        .manage(analyzer::AnalyzerCache::new())
+        .manage(watcher::WatchState::default())
         .invoke_handler(tauri::generate_handler![
             get_backend_port,
             player_read_audio,
@@ -54,9 +57,19 @@ pub fn run() {
             analyzer::player_decode_to_wav,
             analyzer::player_scan_folder,
             analyzer::player_get_dates,
+            watcher::player_watch_folders,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
+
+            // Кэш анализа плеера: память + диск. Дисковый слой переживает
+            // перезапуск — повторное открытие тех же папок не декодирует ничего.
+            let cache_dir = app
+                .path()
+                .app_cache_dir()
+                .ok()
+                .map(|d| d.join("player-analysis"));
+            app.manage(analyzer::AnalyzerCache::new(cache_dir));
 
             // Launch the Go backend as a sidecar. The binary is bundled per
             // platform as binaries/flapp-core-<target-triple>.

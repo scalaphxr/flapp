@@ -38,21 +38,25 @@ export async function pickFolder(): Promise<string | null> {
 }
 
 // onFileDrop subscribes to OS drag-drop over the window, delivering absolute
-// paths. Returns a disposer; a no-op when not in Tauri.
+// paths. Позиция курсора отдаётся в CSS-пикселях (Tauri шлёт физические) —
+// страница может делать hit-test своих дроп-зон. Returns a disposer; a no-op
+// when not in Tauri.
 export async function onFileDrop(
-  onDrop: (paths: string[]) => void,
-  onHover?: (hovering: boolean) => void
+  onDrop: (paths: string[], pos?: { x: number; y: number }) => void,
+  onHover?: (hovering: boolean, pos?: { x: number; y: number }) => void
 ): Promise<() => void> {
   if (!isTauri()) return () => {};
   try {
     const { getCurrentWebview } = await import("@tauri-apps/api/webview");
+    const toCss = (p?: { x: number; y: number }) =>
+      p ? { x: p.x / (window.devicePixelRatio || 1), y: p.y / (window.devicePixelRatio || 1) } : undefined;
     const unlisten = await getCurrentWebview().onDragDropEvent((event) => {
-      const p = event.payload as { type: string; paths?: string[] };
+      const p = event.payload as { type: string; paths?: string[]; position?: { x: number; y: number } };
       if (p.type === "over" || p.type === "enter") {
-        onHover?.(true);
+        onHover?.(true, toCss(p.position));
       } else if (p.type === "drop") {
         onHover?.(false);
-        if (p.paths?.length) onDrop(p.paths);
+        if (p.paths?.length) onDrop(p.paths, toCss(p.position));
       } else {
         onHover?.(false);
       }

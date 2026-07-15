@@ -2,8 +2,9 @@ import React from "react";
 import { Button, Card, Checkbox, Icons } from "@/shared/ui";
 import { useT } from "@/shared/i18n";
 import { useSettingsStore } from "@/shared/model/settings";
+import { useJobsStore } from "@/shared/model/jobs";
 import { pickFolder } from "@/shared/lib/tauri";
-import type { Settings } from "@/shared/api/types";
+import type { Settings, YtStatus } from "@/shared/api/types";
 import { api } from "@/shared/api/client";
 import { formatBytes } from "@/shared/lib/format";
 
@@ -12,6 +13,109 @@ export function SettingsPage() {
   const { settings, load, update } = useSettingsStore();
   const [flash, setFlash] = React.useState(false);
   const [cacheMsg, setCacheMsg] = React.useState<string | null>(null);
+
+  // YouTube: статус подключения, найденный ffmpeg, ожидание OAuth-редиректа.
+  const [ytStatus, setYtStatus] = React.useState<YtStatus | null>(null);
+  const [ffmpegInfo, setFfmpegInfo] = React.useState<{ found: boolean; path: string } | null>(null);
+  const [authWaiting, setAuthWaiting] = React.useState(false);
+  const [authError, setAuthError] = React.useState<string | null>(null);
+  const [showYtAdvanced, setShowYtAdvanced] = React.useState(false);
+
+  const refreshYt = React.useCallback(() => {
+    api.ytStatus().then(setYtStatus).catch(() => setYtStatus(null));
+  }, []);
+  React.useEffect(() => { refreshYt(); }, [refreshYt]);
+  React.useEffect(() => {
+    api.ytFfmpeg().then(setFfmpegInfo).catch(() => setFfmpegInfo(null));
+  }, [settings?.ffmpegPath]);
+
+  // Автоскачивание ffmpeg: джоба с прогрессом; по завершении бэкенд сам
+  // прописывает путь в настройки — перечитываем их и статус.
+  const jobs = useJobsStore((s) => s.jobs);
+  const [ffJobId, setFfJobId] = React.useState<string | null>(null);
+  const ffJob = ffJobId ? jobs[ffJobId] : null;
+  React.useEffect(() => {
+    if (!ffJob) return;
+    if (ffJob.status === "completed") {
+      setFfJobId(null);
+      void load();
+    } else if (ffJob.status === "failed" || ffJob.status === "canceled") {
+      // Джобу не сбрасываем — под кнопкой останется текст ошибки.
+      api.ytFfmpeg().then(setFfmpegInfo).catch(() => {});
+    }
+  }, [ffJob?.status]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleFfmpegDownload() {
+    try {
+      const { jobId } = await api.ytFfmpegDownload();
+      setFfJobId(jobId);
+    } catch { /* статусная строка останется красной */ }
+  }
+
+  // Пока пользователь подтверждает доступ в браузере — опрашиваем статус.
+  // После успеха возвращаем окно приложения на передний план.
+  React.useEffect(() => {
+    if (!authWaiting) return;
+    const iv = window.setInterval(() => {
+      api.ytStatus().then((st) => {
+        setYtStatus(st);
+        if (st.connected) {
+          setAuthWaiting(false);
+          void import("@tauri-apps/api/window").then(async ({ getCurrentWindow }) => {
+            const w = getCurrentWindow();
+            await w.unminimize().catch(() => {});
+            await w.setFocus();
+          }).catch(() => {});
+        }
+      }).catch(() => {});
+    }, 2000);
+    // Не держим «подтверди доступ…» вечно: по таймауту возвращаем обычный
+    // статус, чтобы не маскировать реальное состояние (флоу на бэке живёт 5 мин).
+    const to = window.setTimeout(() => setAuthWaiting(false), 2 * 60_000);
+    return () => { window.clearInterval(iv); window.clearTimeout(to); };
+  }, [authWaiting]);
+
+  // Открывает ссылку в системном браузере (Chrome/Edge), не внутри приложения.
+  function openExternal(url: string) {
+    void import("@tauri-apps/api/core").then(({ invoke }) =>
+      invoke("plugin:shell|open", { path: url }),
+    ).catch(() => {});
+  }
+
+  async function handleYtConnect() {
+    setAuthError(null);
+    try {
+      await api.ytAuth();
+      setAuthWaiting(true);
+    } catch (e) {
+      // Показываем причину прямо в статусной строке — молчаливая кнопка
+      // выглядит сломанной (например, когда не заданы ключи API).
+      setAuthWaiting(false);
+      setAuthError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  async function handleYtDisconnect() {
+    try { await api.ytDisconnect(); } catch { /* ignore */ }
+    setAuthWaiting(false);
+    setAuthError(null);
+    refreshYt();
+  }
+
+  async function pickImageFile(): Promise<string | null> {
+    try {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const res = await open({
+        multiple: false,
+        directory: false,
+        filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp", "bmp"] }],
+      });
+      if (!res) return null;
+      return Array.isArray(res) ? res[0] : res;
+    } catch {
+      return null;
+    }
+  }
 
   async function handleCacheClear() {
     if (!window.confirm(t.settings.cacheClearConfirm)) return;
@@ -196,7 +300,189 @@ export function SettingsPage() {
           </div>
         </Field>
       </Section>
+
+      <Section label={t.settings.ytSection}>
+        {/* Главный сценарий: креды вшиты в сборку — достаточно одной кнопки.
+            Ручная настройка ключей спрятана в свёрнутый блок ниже. */}
+        <p style={{ margin: 0, fontSize: isFl ? "11.5px" : "var(--fs-sm)", lineHeight: 1.55, color: isFl ? "var(--ink-dim)" : "var(--text-faint)", maxWidth: 640 }}>
+          {t.settings.ytEasyHint}
+        </p>
+
+        {/* Подключение канала + статус */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <ChromeBtn isFl={isFl} onClick={handleYtConnect}>
+            <Icons.Yt width={13} height={13} />
+            {ytStatus?.connected ? t.settings.ytReconnect : t.settings.ytConnect}
+          </ChromeBtn>
+          {ytStatus?.connected && (
+            <ChromeBtn isFl={isFl} onClick={handleYtDisconnect}>
+              {t.settings.ytDisconnect}
+            </ChromeBtn>
+          )}
+          <span style={{ fontSize: isFl ? "12px" : "var(--fs-sm)", fontFamily: isFl ? "var(--font-sans)" : undefined, color: authError ? "var(--rec, #ff453a)" : ytStatus?.connected ? "var(--positive)" : (isFl ? "var(--ink-dim)" : "var(--text-faint)") }}>
+            {authError
+              ? `${t.settings.ytAuthFailed} ${authError}`
+              : authWaiting
+                ? t.settings.ytAuthWait
+                : ytStatus?.connected
+                  ? `${t.settings.ytConnected} ${ytStatus.channelTitle || "YouTube"}`
+                  : ytStatus && !ytStatus.configured
+                    ? t.settings.ytNotConfigured
+                    : t.settings.ytNotConnected}
+          </span>
+        </div>
+
+        <div>
+          <Button size="sm" variant="ghost" onClick={() => setShowYtAdvanced((v) => !v)}>
+            {showYtAdvanced ? "▾" : "▸"} {t.settings.ytAdvanced}
+          </Button>
+        </div>
+        {showYtAdvanced && (
+          <>
+            <p style={{ margin: 0, fontSize: isFl ? "11.5px" : "var(--fs-sm)", lineHeight: 1.55, color: isFl ? "var(--ink-dim)" : "var(--text-faint)", maxWidth: 640 }}>
+              {t.settings.ytHowTo}
+            </p>
+
+            {/* Прямые ссылки на нужные страницы консоли — открываются в браузере,
+                чтобы не набирать адреса руками. */}
+            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+              {([
+                [t.settings.ytLinkCreateProject, "https://console.cloud.google.com/projectcreate"],
+                [t.settings.ytLinkEnableApi, "https://console.cloud.google.com/apis/library/youtube.googleapis.com"],
+                [t.settings.ytLinkConsent, "https://console.cloud.google.com/auth/overview"],
+                [t.settings.ytLinkCredentials, "https://console.cloud.google.com/apis/credentials"],
+              ] as [string, string][]).map(([label, url], i) => (
+                <Button key={url} size="sm" variant="ghost" onClick={() => openExternal(url)}>
+                  {i + 1}. {label} ↗
+                </Button>
+              ))}
+            </div>
+
+            <Field label={t.settings.ytClientId}>
+              <MonoInput isFl={isFl} value={s.ytClientId} onCommit={(v) => patch({ ytClientId: v })} placeholder="xxxxxxxx.apps.googleusercontent.com" />
+            </Field>
+            <Field label={t.settings.ytClientSecret}>
+              <MonoInput isFl={isFl} value={s.ytClientSecret} onCommit={(v) => patch({ ytClientSecret: v })} secret />
+            </Field>
+          </>
+        )}
+
+        <Field label={t.settings.ytFfmpegPath}>
+          <MonoInput isFl={isFl} value={s.ffmpegPath} onCommit={(v) => patch({ ffmpegPath: v })} placeholder="C:\ffmpeg\bin\ffmpeg.exe" />
+          <span style={{ fontSize: isFl ? "11.5px" : "var(--fs-sm)", fontFamily: "var(--font-mono)", color: ffmpegInfo?.found ? "var(--positive)" : "var(--rec, #ff453a)" }}>
+            {ffmpegInfo == null ? "…" : ffmpegInfo.found ? `${t.settings.ytFfmpegOk} ${ffmpegInfo.path}` : t.settings.ytFfmpegMissing}
+          </span>
+          {ffmpegInfo != null && !ffmpegInfo.found && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
+              <span style={{ fontSize: isFl ? "11.5px" : "var(--fs-sm)", color: isFl ? "var(--ink-dim)" : "var(--text-faint)", lineHeight: 1.5, maxWidth: 560 }}>
+                {t.settings.ytFfmpegWhy}
+              </span>
+              {ffJob && (ffJob.status === "running" || ffJob.status === "queued") ? (
+                <span style={{ fontSize: isFl ? "11.5px" : "var(--fs-sm)", fontFamily: "var(--font-mono)", color: isFl ? "var(--lcd-amber, #ffb55b)" : "var(--accent)" }}>
+                  {ffJob.stage === "extract" ? t.settings.ytFfmpegExtracting : `${t.settings.ytFfmpegDownloading} ${Math.round((ffJob.progress || 0) * 100)}%`}
+                </span>
+              ) : (
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <Button size="sm" onClick={handleFfmpegDownload}>
+                    <Icons.Download width={13} height={13} />
+                    {t.settings.ytFfmpegDownload}
+                  </Button>
+                  {ffJob?.status === "failed" && (
+                    <span style={{ fontSize: "var(--fs-sm)", color: "var(--rec, #ff453a)" }}>
+                      {t.settings.ytFfmpegFailed}{ffJob.error ? `: ${ffJob.error}` : ""}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </Field>
+
+        <Field label={t.settings.ytDefaultImage}>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <div
+              className="mono"
+              style={{
+                flex: 1,
+                height: isFl ? 36 : "var(--input-height)",
+                display: "flex", alignItems: "center",
+                padding: "0 14px",
+                background: isFl ? "var(--groove)" : "var(--surface-input)",
+                border: `1px solid ${isFl ? "var(--line-work)" : "var(--border-medium)"}`,
+                borderRadius: isFl ? 7 : "var(--radius-input)",
+                boxShadow: isFl ? "inset 0 2px 4px rgba(0,0,0,.35)" : undefined,
+                fontSize: 11,
+                color: s.ytDefaultImage ? (isFl ? "var(--ink-on-work)" : "var(--text-body)") : (isFl ? "var(--ink-dim)" : "var(--text-faint)"),
+                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+              }}
+            >
+              {s.ytDefaultImage || t.common.none}
+            </div>
+            <ChromeBtn isFl={isFl} onClick={() => pickImageFile().then((p) => { if (p) patch({ ytDefaultImage: p }); })}>
+              <Icons.Folder width={13} height={13} />
+              {t.settings.ytPickImage}
+            </ChromeBtn>
+          </div>
+        </Field>
+
+        <p style={{ margin: 0, fontSize: isFl ? "11.5px" : "var(--fs-sm)", lineHeight: 1.55, color: isFl ? "var(--ink-dim)" : "var(--text-faint)", maxWidth: 640 }}>
+          {t.settings.ytQuotaHint}
+        </p>
+      </Section>
     </div>
+  );
+}
+
+// ── Local controls (both themes) ───────────────────────────────────────────────
+
+// MonoInput — текстовое поле для ключей/путей: коммит по blur или Enter.
+function MonoInput({ value, onCommit, isFl, secret, placeholder }: {
+  value: string;
+  onCommit: (v: string) => void;
+  isFl: boolean;
+  secret?: boolean;
+  placeholder?: string;
+}) {
+  const [draft, setDraft] = React.useState(value ?? "");
+  React.useEffect(() => setDraft(value ?? ""), [value]);
+  return (
+    <input
+      type={secret ? "password" : "text"}
+      value={draft}
+      placeholder={placeholder}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => { if (draft.trim() !== (value ?? "")) onCommit(draft.trim()); }}
+      onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+      spellCheck={false}
+      style={{
+        width: "100%", maxWidth: 460,
+        height: isFl ? 36 : "var(--input-height)",
+        padding: "0 14px",
+        background: isFl ? "var(--groove)" : "var(--surface-input)",
+        border: `1px solid ${isFl ? "var(--line-work)" : "var(--border-medium)"}`,
+        borderRadius: isFl ? 7 : "var(--radius-input)",
+        boxShadow: isFl ? "inset 0 2px 4px rgba(0,0,0,.35)" : undefined,
+        color: isFl ? "var(--ink-on-work)" : "var(--text-body)",
+        fontFamily: "var(--font-mono)",
+        fontSize: 12,
+        outline: "none",
+      }}
+    />
+  );
+}
+
+// ChromeBtn — кнопка в стиле страницы: металл в FL-теме, secondary в остальных.
+function ChromeBtn({ onClick, children, isFl }: { onClick: () => void; children: React.ReactNode; isFl: boolean }) {
+  if (!isFl) {
+    return <Button variant="secondary" onClick={onClick}>{children}</Button>;
+  }
+  return (
+    <button
+      onClick={onClick}
+      style={{ height: 34, padding: "0 14px", display: "flex", alignItems: "center", gap: 7, background: "linear-gradient(var(--btn-hi),var(--btn))", border: "1px solid var(--chrome-lo)", borderRadius: 7, color: "var(--ink)", font: "600 12.5px var(--font-sans)", cursor: "pointer", boxShadow: "inset 0 1px 0 rgba(255,255,255,.5),0 1px 2px rgba(0,0,0,.25)" }}
+    >
+      {children}
+    </button>
   );
 }
 

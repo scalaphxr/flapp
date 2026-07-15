@@ -775,9 +775,13 @@ func (s *HarvestService) consume(ctx context.Context, a analyzed, req domain.Har
 	existingID, kind, existingName := index.Check(a.md5, a.sha256, a.fingerprint)
 	tmr.dedupWall += time.Since(tc)
 
-	// Дублем считается только файл с совпадающим именем (case-insensitive).
-	// Один и тот же байтовый контент под разными именами — разные звуки, храним оба.
-	isDuplicate := kind != dedup.Unique && strings.EqualFold(existingName, strings.ToLower(a.cand.name))
+	// Точный (байтовый) дубль схлопывается независимо от имени: SHA-256 совпал —
+	// это тот же звук, как бы файл ни назывался. Акустический (перцептивный)
+	// матч — вероятностный, поэтому засчитывается только при совпадении имён
+	// (case-insensitive): одинаковое имя подтверждает, что это тот же сэмпл,
+	// а не два похожих, но разных звука.
+	isDuplicate := kind == dedup.Exact ||
+		(kind == dedup.Acoustic && strings.EqualFold(existingName, a.cand.name))
 
 	if isDuplicate {
 		acc.AddDuplicate(a.cand.size)

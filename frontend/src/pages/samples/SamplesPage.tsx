@@ -317,7 +317,7 @@ export function SamplesPage() {
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, gap: isFl ? 0 : 14, padding: isFl ? 14 : 0 }}>
 
       {/* Top controls */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: isFl ? 14 : 0 }}>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           {/* Import toggle button */}
           {isFl ? (
@@ -405,97 +405,98 @@ export function SamplesPage() {
 
       {/* Scan panel */}
       {scanOpen ? (
-        <div style={{ display: "flex", gap: isFl ? 12 : 10, flexShrink: 0, height: isFl ? 200 : 240, marginBottom: isFl ? 12 : 0 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, flexShrink: 0, marginBottom: isFl ? 12 : 0 }}>
+          <div style={{ display: "flex", gap: isFl ? 12 : 10, height: isFl ? 200 : 240, overflowX: "auto" }}>
 
-          {/* Block 1 — Drop zone */}
-          <Card padding={0} style={{ flex: 1, overflow: "hidden" }}>
-            <DropZone
-              title={t.harvest.dropTitle}
-              subtitle={t.harvest.dropSubtitle}
-              active={dragHover}
-              onClick={() => pickFiles().then(addPaths)}
-              style={{ height: "100%", minHeight: 0 }}
-            />
-          </Card>
+            {/* Block 1 — Drop zone */}
+            <Card padding={0} style={{ flex: 1, minWidth: 210, overflow: "hidden" }}>
+              <DropZone
+                title={t.harvest.dropTitle}
+                subtitle={t.harvest.dropSubtitle}
+                active={dragHover}
+                onClick={() => pickFiles().then(addPaths)}
+                style={{ height: "100%", minHeight: 0 }}
+              />
+            </Card>
 
-          {/* Block 2 — Project queue */}
-          <Card padding={0} style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-            <div style={{ flex: 1, overflowY: "auto", padding: "10px 10px 0" }}>
-              {queue.length === 0 ? (
-                <div style={{ padding: "24px 0", textAlign: "center", color: "var(--text-faint)", fontSize: "var(--fs-sm)" }}>
-                  {t.harvest.queueEmpty}
-                </div>
-              ) : (
-                queue.map((item, i) => {
-                  const QIcon = Icons[queueIcon[item.kind]];
-                  const sel = selectedIdx === i;
-                  return (
-                    <div
-                      key={item.path}
-                      onClick={() => setSelectedIdx(sel ? null : i)}
-                      style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: "var(--radius-md)", cursor: "pointer", background: sel ? "var(--accent-soft)" : "transparent", color: sel ? "var(--accent)" : "var(--text-body)" }}
-                    >
-                      <span style={{ display: "inline-flex", color: sel ? "var(--accent)" : "var(--text-faint)" }}><QIcon /></span>
-                      <span style={{ fontSize: "var(--fs-sm)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.name}</span>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-            <div style={{ display: "flex", gap: 6, padding: "8px 10px", borderTop: "1px solid var(--border-soft)", flexShrink: 0 }}>
-              <Button variant="ghost" size="sm" icon={<Icons.X />} disabled={selectedIdx === null} onClick={() => { if (selectedIdx === null) return; setQueue((q) => q.filter((_, i) => i !== selectedIdx)); setSelectedIdx(null); }}>
-                {t.harvest.removeSelected}
-              </Button>
-              <Button variant="ghost" size="sm" icon={<Icons.Trash />} disabled={queue.length === 0} onClick={() => { setQueue([]); setSelectedIdx(null); }}>
-                {t.harvest.clearQueue}
-              </Button>
-            </div>
-          </Card>
-
-          {/* Block 3 — Options + run */}
-          <Card padding={0} style={{ flex: 1, display: "flex", flexDirection: "column", padding: "14px 16px", gap: 10 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 20px" }}>
-              <Checkbox checked={opts.guess} onChange={(v) => setOpts({ ...opts, guess: v })} label={t.harvest.optGuess} />
-              <Checkbox checked={opts.extra} onChange={(v) => setOpts({ ...opts, extra: v })} label={t.harvest.optExtra} />
-              <Checkbox checked={opts.deep} onChange={(v) => setOpts({ ...opts, deep: v })} label={t.harvest.optDeep} />
-              <Checkbox checked={opts.onlyFlp} onChange={(v) => setOpts({ ...opts, onlyFlp: v })} label={t.harvest.optOnlyFlp} />
-              <Checkbox checked={opts.tags} onChange={(v) => setOpts({ ...opts, tags: v })} label={t.harvest.optTags} />
-              <Checkbox checked={opts.extractMidi} onChange={(v) => setOpts({ ...opts, extractMidi: v })} label={t.midi.extract} />
-            </div>
-
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <Button variant="secondary" size="sm" icon={<Icons.Folder />} onClick={() => pickFolder().then((d) => { if (d) setDrumkitsDir(d); })}>
-                {t.harvest.drumkitsPick}
-              </Button>
-              <span className="mono" style={{ fontSize: 11, color: drumkitsDir ? "var(--text-muted)" : "var(--text-faint)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {drumkitsDir || t.harvest.drumkitsLabel}
-              </span>
-            </div>
-
-            <div style={{ flex: 1 }} />
-
-            {queue.some(item => item.kind === "flp") && !drumkitsDir && (
-              <div style={{
-                padding: "7px 10px",
-                borderRadius: 6,
-                background: "rgba(255,180,0,.13)",
-                border: "1px solid rgba(255,180,0,.35)",
-                fontSize: "var(--fs-caption)",
-                color: "var(--accent-amber, #e8a020)",
-                lineHeight: 1.4,
-              }}>
-                {t.harvest.flpNoDrumkitsWarning}
+            {/* Block 2 — Project queue */}
+            <Card padding={0} style={{ flex: 1, minWidth: 210, display: "flex", flexDirection: "column" }}>
+              <div style={{ flex: 1, overflowY: "auto", padding: "10px 10px 0" }}>
+                {queue.length === 0 ? (
+                  <div style={{ padding: "24px 0", textAlign: "center", color: "var(--text-faint)", fontSize: "var(--fs-sm)" }}>
+                    {t.harvest.queueEmpty}
+                  </div>
+                ) : (
+                  queue.map((item, i) => {
+                    const QIcon = Icons[queueIcon[item.kind]];
+                    const sel = selectedIdx === i;
+                    return (
+                      <div
+                        key={item.path}
+                        onClick={() => setSelectedIdx(sel ? null : i)}
+                        style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: "var(--radius-md)", cursor: "pointer", background: sel ? "var(--accent-soft)" : "transparent", color: sel ? "var(--accent)" : "var(--text-body)" }}
+                      >
+                        <span style={{ display: "inline-flex", color: sel ? "var(--accent)" : "var(--text-faint)" }}><QIcon /></span>
+                        <span style={{ fontSize: "var(--fs-sm)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.name}</span>
+                      </div>
+                    );
+                  })
+                )}
               </div>
-            )}
+              <div style={{ display: "flex", gap: 6, padding: "8px 10px", borderTop: "1px solid var(--border-soft)", flexShrink: 0 }}>
+                <Button variant="ghost" size="sm" icon={<Icons.X />} disabled={selectedIdx === null} onClick={() => { if (selectedIdx === null) return; setQueue((q) => q.filter((_, i) => i !== selectedIdx)); setSelectedIdx(null); }}>
+                  {t.harvest.removeSelected}
+                </Button>
+                <Button variant="ghost" size="sm" icon={<Icons.Trash />} disabled={queue.length === 0} onClick={() => { setQueue([]); setSelectedIdx(null); }}>
+                  {t.harvest.clearQueue}
+                </Button>
+              </div>
+            </Card>
 
-            {running ? (
-              <Button variant="ghost" icon={<Icons.Stop />} onClick={stopHarvest}>{t.common.stop}</Button>
-            ) : (
-              <Button variant="primary" full icon={<Icons.Search />} disabled={queue.length === 0} onClick={runHarvest} style={{ background: "var(--accent-amber)", borderColor: "var(--accent-amber)" }}>
-                {t.harvest.run}
-              </Button>
-            )}
-          </Card>
+            {/* Block 3 — Options */}
+            <Card padding={0} style={{ flex: 1, minWidth: 210, display: "flex", flexDirection: "column", padding: "14px 16px", gap: 10, overflowY: "auto" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 20px" }}>
+                <Checkbox checked={opts.guess} onChange={(v) => setOpts({ ...opts, guess: v })} label={t.harvest.optGuess} />
+                <Checkbox checked={opts.extra} onChange={(v) => setOpts({ ...opts, extra: v })} label={t.harvest.optExtra} />
+                <Checkbox checked={opts.deep} onChange={(v) => setOpts({ ...opts, deep: v })} label={t.harvest.optDeep} />
+                <Checkbox checked={opts.onlyFlp} onChange={(v) => setOpts({ ...opts, onlyFlp: v })} label={t.harvest.optOnlyFlp} />
+                <Checkbox checked={opts.tags} onChange={(v) => setOpts({ ...opts, tags: v })} label={t.harvest.optTags} />
+                <Checkbox checked={opts.extractMidi} onChange={(v) => setOpts({ ...opts, extractMidi: v })} label={t.midi.extract} />
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <Button variant="secondary" size="sm" icon={<Icons.Folder />} onClick={() => pickFolder().then((d) => { if (d) setDrumkitsDir(d); })}>
+                  {t.harvest.drumkitsPick}
+                </Button>
+                <span className="mono" style={{ fontSize: 11, color: drumkitsDir ? "var(--text-muted)" : "var(--text-faint)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {drumkitsDir || t.harvest.drumkitsLabel}
+                </span>
+              </div>
+            </Card>
+          </div>
+
+          {/* Run bar — вынесена из карточек, поэтому видна при любом размере окна */}
+          {queue.some(item => item.kind === "flp") && !drumkitsDir && (
+            <div style={{
+              padding: "7px 10px",
+              borderRadius: 6,
+              background: "rgba(255,180,0,.13)",
+              border: "1px solid rgba(255,180,0,.35)",
+              fontSize: "var(--fs-caption)",
+              color: "var(--accent-amber, #e8a020)",
+              lineHeight: 1.4,
+            }}>
+              {t.harvest.flpNoDrumkitsWarning}
+            </div>
+          )}
+
+          {running ? (
+            <Button variant="ghost" full icon={<Icons.Stop />} onClick={stopHarvest}>{t.common.stop}</Button>
+          ) : (
+            <Button variant="primary" full icon={<Icons.Search />} disabled={queue.length === 0} onClick={runHarvest} style={{ background: "var(--accent-amber)", borderColor: "var(--accent-amber)" }}>
+              {t.harvest.run}
+            </Button>
+          )}
         </div>
       ) : null}
 

@@ -28,6 +28,7 @@ import (
 	"github.com/flapp/core/internal/infrastructure/jobs"
 	"github.com/flapp/core/internal/infrastructure/settings"
 	"github.com/flapp/core/internal/infrastructure/tagging"
+	"github.com/flapp/core/internal/infrastructure/youtube"
 	"github.com/flapp/core/internal/usecase"
 )
 
@@ -122,6 +123,17 @@ func run(dir string, port int) error {
 	packbuild := usecase.NewPackBuilderService(store.Samples, packer, exportDir, midiExtract)
 	analytics := usecase.NewAnalyticsService(store.Analytics)
 	smart := usecase.NewSmartSearchService(store.Samples)
+	ytClient := youtube.NewClient(filepath.Join(dir, "youtube_token.json"), func() (string, string) {
+		// Свои ключи из настроек имеют приоритет; иначе — вшитые в сборку,
+		// чтобы канал подключался в один клик без Google Cloud Console.
+		c := cfg.Get()
+		if c.YtClientID != "" && c.YtClientSecret != "" {
+			return c.YtClientID, c.YtClientSecret
+		}
+		return youtube.DefaultClientID, youtube.DefaultClientSecret
+	})
+	youtubeSvc := usecase.NewYouTubeService(ytClient, cfg, tempDir, filepath.Join(dir, "ffmpeg"))
+	covers := usecase.NewCoverService(filepath.Join(dir, "covers"))
 
 	server := httpadapter.New(httpadapter.Services{
 		Library:     library,
@@ -131,6 +143,8 @@ func run(dir string, port int) error {
 		Analytics:   analytics,
 		Smart:       smart,
 		MidiExtract: midiExtract,
+		YouTube:     youtubeSvc,
+		Covers:      covers,
 		Projects:    store.Projects,
 		Collections: store.Collections,
 		Jobs:        queue,

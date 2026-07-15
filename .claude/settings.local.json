@@ -25,5 +25,7 @@
       "PowerShell($env:PATH = \"$env:USERPROFILE\\\\.cargo\\\\bin;C:\\\\Program Files\\\\Go\\\\bin;$env:PATH\"; Set-Location \"C:\\\\Users\\\\flipgod\\\\Desktop\\\\sborka-zvukov\"; .\\\\frontend\\\\node_modules\\\\.bin\\\\tauri build 2>&1)",
       "Skill(run)"
     ]
-  }
+  },
+  "prefersReducedMotion": false,
+  "spinnerTipsEnabled": false
 }

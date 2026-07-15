@@ -75,8 +75,9 @@ func NewIndex(deep bool, threshold int) *Index {
 
 // Check reports whether the given fingerprints match something already indexed.
 // Returns the matched sample id, kind of match, and the existing entry's name
-// (lowercase). Callers should only treat the result as a true duplicate when
-// the existing name equals the candidate name (case-insensitive).
+// (lowercase). Exact matches are true duplicates by themselves; Acoustic
+// matches are probabilistic, so callers should additionally require the
+// existing name to equal the candidate name (case-insensitive).
 func (ix *Index) Check(md5, sha256, fingerprint string) (id int64, kind Kind, existingName string) {
 	if sha256 != "" {
 		if e, ok := ix.bySHA[sha256]; ok {

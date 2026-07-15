@@ -29,6 +29,7 @@ export default function App() {
 
   const tabs: TabItem[] = [
     { key: "sounds",   label: t.nav.sounds,   icon: <Icons.Wave /> },
+    { key: "player",   label: t.nav.player,   icon: <Icons.Music /> },
     { key: "settings", label: t.nav.settings, icon: <Icons.Gear /> },
   ];
 

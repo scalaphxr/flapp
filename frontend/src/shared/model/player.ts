@@ -10,7 +10,7 @@ interface PlayerState {
   audio: HTMLAudioElement | null;
   toggle: (id: number) => Promise<void>;
   stop: () => void;
-  seek: (ratio: number) => void;
+  seek: (ratio: number, knownDuration?: number) => void;
 }
 
 export const usePlayerStore = create<PlayerState>((set, get) => ({
@@ -45,10 +45,19 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     set({ playingId: null });
   },
 
-  seek: (ratio) => {
+  // knownDuration (harvest-computed, e.g. sample.features.durationSeconds) is
+  // preferred over audio.duration: for VBR MP3 the browser's estimate can be
+  // noticeably off, which used to make click position and seek target
+  // disagree — the waveform playhead already trusts the harvest duration
+  // (see WaveformCanvas in SoundTable), so seek must use the same source.
+  seek: (ratio, knownDuration) => {
     const { audio } = get();
-    if (audio && audio.duration > 0 && isFinite(audio.duration)) {
-      audio.currentTime = Math.max(0, Math.min(1, ratio)) * audio.duration;
+    if (!audio) return;
+    const dur = knownDuration && knownDuration > 0
+      ? knownDuration
+      : (isFinite(audio.duration) && audio.duration > 0 ? audio.duration : 0);
+    if (dur > 0) {
+      audio.currentTime = Math.max(0, Math.min(1, ratio)) * dur;
     }
   },
 }));

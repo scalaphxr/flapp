@@ -15,13 +15,20 @@ func TestClassifyByName(t *testing.T) {
 		// 808 / sub
 		{"808 deep sub F.wav", domain.Cat808},
 		{"sub_bass_C.wav", domain.Cat808},
-		// bd = 808/sub в этом проекте (не kick)
+		{"808 Bass.wav", domain.Cat808},
+		{"808 Sub Slide.wav", domain.Cat808},
+		// bd = TR-808 bass drum used as the sub instrument in this library (not Kick)
 		{"bd_01.wav", domain.Cat808},
 		{"BD_heavy.wav", domain.Cat808},
 		{"BD 01.wav", domain.Cat808},
 		// kick (no bd, pure kick)
 		{"kick_punchy_01.wav", domain.CatKick},
 		{"bassdrum_hard.wav", domain.CatKick},
+		// kick vs 808 collisions: an explicit "kick" word wins over a bare "808" style tag
+		{"808 Kick.wav", domain.CatKick},
+		{"Kick 808 Deep.wav", domain.CatKick},
+		{"Trap Kick 808 Bright.wav", domain.CatKick},
+		{"Kick_BD_808.wav", domain.CatKick},
 		// snare — sn as abbreviation
 		{"snare_01.wav", domain.CatSnare},
 		{"sn_tight.wav", domain.CatSnare},   // sn_ prefix
@@ -164,5 +171,55 @@ func TestShortInstrumentNameNotLoop(t *testing.T) {
 	got2, _ := c.Classify("synth_pad_long.wav", "", domain.AudioFeatures{Analyzed: true, DurationSeconds: 8.0, SpectralCentroid: 2500, ZeroCrossRate: 0.05})
 	if got2 != domain.CatLoop {
 		t.Errorf("synth_pad_long.wav (8s) = %q, want Loop", got2)
+	}
+}
+
+func TestLongOneShotNotLoop(t *testing.T) {
+	c := New()
+
+	// A long sub/bass note (single onset, multi-second release tail) must NOT
+	// become a Loop just because duration >= 4s. Duration alone used to be the
+	// only guard, so a released 808/bass one-shot with a long tail (very common
+	// — trap 808s often ring out for 4-8s) was force-classified as Loop.
+	longOneShot := domain.AudioFeatures{
+		Analyzed: true, DurationSeconds: 6.0, OnsetCount: 1,
+		SpectralCentroid: 150, LowEnergyRatio: 0.7, SubBassRatio: 0.4,
+	}
+	got, _ := c.Classify("reese_bassline_G.wav", "", longOneShot)
+	if got == domain.CatLoop {
+		t.Errorf("reese_bassline_G.wav (6s, 1 onset) classified as Loop, want 808/Kick/FX")
+	}
+
+	// Same keyword family, but genuinely repeating (many onsets) → stays Loop.
+	realLoop := domain.AudioFeatures{
+		Analyzed: true, DurationSeconds: 6.0, OnsetCount: 12,
+		SpectralCentroid: 1200, ZeroCrossRate: 0.1,
+	}
+	got2, _ := c.Classify("reese_bassline_G.wav", "", realLoop)
+	if got2 != domain.CatLoop {
+		t.Errorf("reese_bassline_G.wav (6s, 12 onsets) = %q, want Loop", got2)
+	}
+
+	// A BPM tag in the name is itself a loop confirmation: it must survive the
+	// one-shot safety net even when the audio profile alone looks ambiguous.
+	bpmTagged := domain.AudioFeatures{Analyzed: true, DurationSeconds: 2.0, SpectralCentroid: 2000, ZeroCrossRate: 0.05}
+	got3, _ := c.Classify("synth 140 bpm.wav", "", bpmTagged)
+	if got3 != domain.CatLoop {
+		t.Errorf("synth 140 bpm.wav (tagged, 2s) = %q, want Loop (BPM tag confirms loop)", got3)
+	}
+}
+
+func TestFolderClassificationDeterministic(t *testing.T) {
+	// Folder names that contain more than one category keyword as a substring
+	// (e.g. "808 Kicks" contains both "808" and "kicks") must resolve the same
+	// way every call. classifyByFolderPath used to range directly over a Go
+	// map for the substring fallback — map iteration order is randomised on
+	// every range, even within a single process — so this could silently pick
+	// a different category from one call to the next.
+	for i := 0; i < 20; i++ {
+		cat, _, ok := ClassifyByName("Deep 01.wav", "Drums/808 Kicks/Deep 01.wav")
+		if !ok || cat != domain.CatKick {
+			t.Fatalf("run %d: folder '808 Kicks' = %q (ok=%v), want Kick", i, cat, ok)
+		}
 	}
 }

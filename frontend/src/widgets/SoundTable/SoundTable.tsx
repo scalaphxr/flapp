@@ -6,6 +6,7 @@ import type { Sample } from "@/shared/api/types";
 import { ALL_CATEGORIES } from "@/shared/config/categories";
 import { api } from "@/shared/api/client";
 import { usePlayerStore } from "@/shared/model/player";
+import { fileDragProps } from "@/shared/lib/dragOut";
 
 interface SoundTableProps {
   samples: Sample[];
@@ -135,6 +136,16 @@ export function SoundTable({
   const botPad   = Math.max(0, (samples.length - visEnd - 1) * ROW_H);
   // ──────────────────────────────────────────────────────────────────────────
 
+  // Пути выделенных строк: перетаскивание выделенной строки утаскивает всё
+  // выделение (как в проводнике). Невыделенная строка тащится одна.
+  const selectedPaths = React.useMemo(
+    () =>
+      selectable && selected && selected.size > 1
+        ? samples.filter((s) => selected.has(s.id)).map((s) => s.path)
+        : null,
+    [selectable, selected, samples],
+  );
+
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1,
       ...(isFl ? {
@@ -174,6 +185,7 @@ export function SoundTable({
             active={activeId === s.id}
             showWaveform={showWaveform}
             isFl={isFl}
+            dragPaths={selectedPaths && selected?.has(s.id) ? selectedPaths : [s.path]}
           />
         ))}
         {botPad > 0 && <div style={{ height: botPad }} aria-hidden="true" />}
@@ -201,6 +213,7 @@ function SoundRow({
   active,
   showWaveform,
   isFl,
+  dragPaths,
 }: {
   sample: Sample;
   zebra: boolean;
@@ -215,6 +228,7 @@ function SoundRow({
   active?: boolean;
   showWaveform: boolean;
   isFl: boolean;
+  dragPaths: string[];
 }) {
   const t = useT();
   const [hover, setHover] = React.useState(false);
@@ -259,6 +273,7 @@ function SoundRow({
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       onClick={onRowClick}
+      {...fileDragProps(() => dragPaths)}
       style={{
         display: "grid",
         gridTemplateColumns: cols,
@@ -632,9 +647,16 @@ function WaveformCanvas({ id, playing, isFl, durationSec }: {
   }, [id]);
 
   function handleClick(e: React.MouseEvent<HTMLCanvasElement>) {
-    if (!playing) return;
+    if (!playing || !audio) return;
     const rect = e.currentTarget.getBoundingClientRect();
-    seek((e.clientX - rect.left) / rect.width);
+    const ratio = (e.clientX - rect.left) / rect.width;
+    // Same duration priority as the playhead loop above: harvest durationSec
+    // beats the browser's (VBR-MP3-unreliable) audio.duration estimate.
+    const audioDur = audio.duration;
+    const dur = (durationSec && durationSec > 0)
+      ? durationSec
+      : (isFinite(audioDur) && audioDur > 0 ? audioDur : 0);
+    seek(ratio, dur);
   }
 
   return (

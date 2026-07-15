@@ -3,6 +3,7 @@ package classify
 import (
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/flapp/core/internal/domain"
@@ -39,6 +40,10 @@ var nameRules = []keywordRule{
 	}},
 
 	// ── Sub / 808 ─────────────────────────────────────────────────────────────
+	// "bd" here specifically means the Roland TR-808 Bass Drum sound used as
+	// the sustained 808 sub-bass instrument (the genre's namesake) — the
+	// convention in this trap/hip-hop library, confirmed by the user against
+	// their real files. It is NOT the generic GM "Bass Drum = Kick" shorthand.
 	{domain.Cat808, []string{
 		"808",
 		"sub bass", "subbass", "sub_bass",
@@ -179,7 +184,7 @@ var nameRules = []keywordRule{
 
 // abbreviationRules are matched with word-boundary awareness (containsWord).
 var abbreviationRules = []keywordRule{
-	// bd = 808/sub в этом проекте; sub тоже сюда
+	// bd = 808 (TR-808 bass drum used as the sub instrument); sub too
 	{domain.Cat808, []string{"bd", "sub"}},
 	// kick abbreviations
 	{domain.CatKick, []string{"kk"}},
@@ -199,7 +204,7 @@ var abbreviationRules = []keywordRule{
 
 var folderCategoryMap = map[string]domain.Category{
 	"808": domain.Cat808, "808s": domain.Cat808,
-	"sub": domain.Cat808, "sub bass": domain.Cat808,
+	"sub": domain.Cat808, "sub bass": domain.Cat808, "bd": domain.Cat808,
 
 	"kick": domain.CatKick, "kicks": domain.CatKick,
 	"bass drum": domain.CatKick, "bassdrum": domain.CatKick,
@@ -207,37 +212,67 @@ var folderCategoryMap = map[string]domain.Category{
 	"snare": domain.CatSnare, "snares": domain.CatSnare,
 
 	"clap": domain.CatClap, "claps": domain.CatClap,
-	"rimshot": domain.CatClap,
+	"rimshot": domain.CatClap, "rimshots": domain.CatClap, "rimz": domain.CatClap,
+	"rims": domain.CatClap, "rim": domain.CatClap, "rim shots": domain.CatClap,
 
 	"hh": domain.CatHiHat, "hi hat": domain.CatHiHat, "hi hats": domain.CatHiHat,
 	"hihat": domain.CatHiHat, "hihats": domain.CatHiHat, "hi_hat": domain.CatHiHat,
+	"hi-hat": domain.CatHiHat, "hi-hats": domain.CatHiHat,
 	"closed hat": domain.CatHiHat, "closedhat": domain.CatHiHat,
 
 	"oh": domain.CatOpenHat, "open hat": domain.CatOpenHat, "open hats": domain.CatOpenHat,
-	"openhat": domain.CatOpenHat, "open-hat": domain.CatOpenHat,
+	"openhat": domain.CatOpenHat, "open-hat": domain.CatOpenHat, "op hat": domain.CatOpenHat,
 	"crash": domain.CatOpenHat, "crashes": domain.CatOpenHat,
 	"cymbal": domain.CatOpenHat, "cymbals": domain.CatOpenHat,
 	"oh & crashes": domain.CatOpenHat,
 
 	"perc": domain.CatPerc, "percs": domain.CatPerc, "percussion": domain.CatPerc,
 	"scratch": domain.CatPerc, "scratches": domain.CatPerc,
+	"shaker": domain.CatPerc, "shakers": domain.CatPerc,
+	"tom": domain.CatPerc, "toms": domain.CatPerc,
 
 	"fx": domain.CatFX, "fxs": domain.CatFX, "sfx": domain.CatFX,
-	"effects": domain.CatFX,
+	"effects": domain.CatFX, "riser": domain.CatFX, "risers": domain.CatFX,
 
 	"vox": domain.CatVox, "vocals": domain.CatVox, "vocal": domain.CatVox,
 	"chants": domain.CatVox, "voices": domain.CatVox,
 
-	"loops": domain.CatLoop, "melody loops": domain.CatLoop,
+	"loop": domain.CatLoop, "loops": domain.CatLoop, "loopkit": domain.CatLoop,
+	"melody loops": domain.CatLoop,
 	"pluck": domain.CatLoop, "plucks": domain.CatLoop,
 	"pad": domain.CatLoop, "pads": domain.CatLoop,
 	"lead": domain.CatLoop, "leads": domain.CatLoop,
 	"synth": domain.CatLoop, "strings": domain.CatLoop,
 	"melody": domain.CatLoop, "melodies": domain.CatLoop,
+	"bell": domain.CatLoop, "bells": domain.CatLoop,
 
 	"bass": domain.Cat808, // "bass" folder = sub bass / 808 sounds
 
 	"drum loops": domain.CatDrumLoop, "loops drums": domain.CatDrumLoop,
+}
+
+// folderKeywordsByLength holds folderCategoryMap keys ordered longest-first
+// so the substring fallback in classifyByFolderPath is deterministic and
+// always prefers the most specific keyword. Go randomises map iteration
+// order on every run, so ranging over folderCategoryMap directly (the old
+// behaviour) picked an arbitrary winner whenever a folder name contained more
+// than one keyword as a substring (e.g. "808 Kicks" matches both "808" and
+// "kick") — this produced different classifications for the same file across
+// runs, matching the reported "sometimes" mis-tagging.
+var folderKeywordsByLength = sortedFolderKeywords()
+
+func sortedFolderKeywords() []string {
+	keys := make([]string, 0, len(folderCategoryMap))
+	for k := range folderCategoryMap {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if len(keys[i]) != len(keys[j]) {
+			return len(keys[i]) > len(keys[j])
+		}
+		return keys[i] < keys[j] // stable tiebreak between equal-length keys
+	})
+	return keys
 }
 
 func classifyByFolderPath(relPath string) (domain.Category, float64) {
@@ -251,9 +286,9 @@ func classifyByFolderPath(relPath string) (domain.Category, float64) {
 			}
 			return cat, weight
 		}
-		for keyword, cat := range folderCategoryMap {
+		for _, keyword := range folderKeywordsByLength {
 			if len(keyword) >= 3 && strings.Contains(dir, keyword) {
-				return cat, 5.0
+				return folderCategoryMap[keyword], 5.0
 			}
 		}
 	}
@@ -313,7 +348,7 @@ type abbrRule struct {
 }
 
 var abbreviationTokenMap = []abbrRule{
-	{"bd", domain.Cat808},   // в этом проекте bd = 808, не Kick
+	{"bd", domain.Cat808},   // bd = 808 (TR-808 bass drum used as the sub instrument)
 	{"sc", domain.CatClap},  // sc = snareclap
 	{"sn", domain.CatSnare},
 	{"sd", domain.CatSnare},
@@ -402,18 +437,53 @@ func classifyBySuffixWord(name string) (domain.Category, bool) {
 	return "", false
 }
 
+// ── Kick vs 808 disambiguation ────────────────────────────────────────────────
+
+// resolveKickVs808 handles the most common source of Kick/808 confusion:
+// sample names that carry BOTH an explicit kick word and "808" styling, e.g.
+// "808 Kick.wav", "Trap Kick 808 Bright.wav". Producers use "808" as a
+// style/character tag across a whole kit (808 Kick, 808 Snare, 808 Hi Hat…),
+// not exclusively for the sustained sub-bass instrument, so an explicit kick
+// word should win over a bare "808" tag. It only backs off when the name also
+// carries unambiguous sub-bass phrasing ("sub bass", "808 bass", "bassline"…),
+// in which case the normal passes below decide.
+//
+// Deliberately excludes "bd": in this (trap/808) library "bd" means the
+// TR-808 bass drum used as the sub instrument itself, i.e. 808 — not a Kick
+// abbreviation. Confirmed against real library files.
+func resolveKickVs808(haystack string) (domain.Category, bool) {
+	hasKickWord := containsTerm(haystack, "kick") || containsTerm(haystack, "kik") ||
+		containsTerm(haystack, "kck") || containsTerm(haystack, "bassdrum") ||
+		containsTerm(haystack, "bass drum") || containsTerm(haystack, "base drum")
+	if !hasKickWord {
+		return "", false
+	}
+	hasSubBassWord := containsTerm(haystack, "sub bass") || containsTerm(haystack, "subbass") ||
+		containsTerm(haystack, "sub_bass") || containsTerm(haystack, "808 bass") ||
+		containsTerm(haystack, "808bass") || containsTerm(haystack, "bassline") ||
+		containsTerm(haystack, "bass line") || containsTerm(haystack, "bass_line") ||
+		containsWord(haystack, "sub")
+	if hasSubBassWord {
+		return "", false
+	}
+	return domain.CatKick, true
+}
+
 // ── Public multi-pass classifier ──────────────────────────────────────────────
 
-// ClassifyByName runs five sequential passes and returns (cat, score, ok).
+// ClassifyByName runs six sequential passes and returns (cat, score, ok).
 // Score: 9.0 = folder (near-certain) → 5.0 = keyword.
 func ClassifyByName(name, relPath string) (domain.Category, float64, bool) {
 	if cat, score := classifyByFolderPath(relPath); score > 0 {
 		return cat, score, true
 	}
+	lower := strings.ToLower(name + " " + relPath)
+	if cat, ok := resolveKickVs808(lower); ok {
+		return cat, 8.0, true
+	}
 	if cat, ok := classifyByDashPrefix(name); ok {
 		return cat, 9.0, true
 	}
-	lower := strings.ToLower(name + " " + relPath)
 	if cat, ok := classifyByAbbreviations(lower); ok {
 		return cat, 7.0, true
 	}

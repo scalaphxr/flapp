@@ -115,6 +115,11 @@ export const Icons = {
       <path d="M7 14v3M12 9v8M17 5v12" />
     </svg>
   ),
+  Pencil: (p: P) => (
+    <svg width="14" height="14" viewBox="0 0 24 24" {...base} {...p}>
+      <path d="M17 3a2.83 2.83 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+    </svg>
+  ),
   X: (p: P) => (
     <svg width="14" height="14" viewBox="0 0 24 24" {...base} strokeWidth={2.2} {...p}>
       <path d="M6 6l12 12M18 6 6 18" />
@@ -130,6 +135,12 @@ export const Icons = {
       <path d="M9 18V5l12-2v13" />
       <circle cx="6" cy="18" r="3" />
       <circle cx="18" cy="16" r="3" />
+    </svg>
+  ),
+  Yt: (p: P) => (
+    <svg width="15" height="15" viewBox="0 0 24 24" {...base} {...p}>
+      <rect x="2" y="5" width="20" height="14" rx="4" />
+      <polygon points="10,9 15,12 10,15" fill="currentColor" stroke="none" />
     </svg>
   ),
   Play: (p: P) => (

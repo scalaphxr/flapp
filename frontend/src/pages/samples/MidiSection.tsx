@@ -8,6 +8,7 @@ import { useJobsStore } from "@/shared/model/jobs";
 import { useSettingsStore } from "@/shared/model/settings";
 import { formatDuration } from "@/shared/lib/format";
 import { pickFolder } from "@/shared/lib/tauri";
+import { fileDragProps } from "@/shared/lib/dragOut";
 import { useMidiPlayer } from "../midi/useMidiPlayer";
 
 // ── Category colours ──────────────────────────────────────────────────────────
@@ -166,6 +167,16 @@ export function MidiSection() {
   const cols = isFl ? COLS_FL : COLS_STD;
   const midiOutputDir = settings?.midiOutputDir ?? "";
 
+  // Пути .mid файлов выделенных клипов: перетаскивание выделенной строки
+  // утаскивает всё выделение. Клипы без файла на диске отфильтрует хелпер.
+  const selectedMidPaths = React.useMemo(
+    () =>
+      selected.size > 1
+        ? clips.filter((c) => selected.has(c.id)).map((c) => c.filePath)
+        : null,
+    [selected, clips],
+  );
+
   const visStart = Math.max(0, Math.floor((scrollTop - BUFFER * ROW_H) / ROW_H));
   const visEnd   = Math.min(filtered.length - 1, Math.ceil((scrollTop + viewH + BUFFER * ROW_H) / ROW_H));
   const topPad   = visStart * ROW_H;
@@ -245,6 +256,7 @@ export function MidiSection() {
               onToggle={() => setSelected((p) => { const n = new Set(p); n.has(clip.id) ? n.delete(clip.id) : n.add(clip.id); return n; })}
               onDownload={() => handleDownload(clip)}
               onCategoryChange={(cat) => handleCategoryChange(clip.id, cat)}
+              dragPaths={selectedMidPaths && selected.has(clip.id) ? selectedMidPaths : [clip.filePath]}
             />
           ))}
           {botPad > 0 && <div style={{ height: botPad }} />}
@@ -424,9 +436,10 @@ function MiniRoll({ notes, durationTicks, ticksPerBeat, bpm, playheadSec, isFl, 
 }
 
 // ── MIDI row ──────────────────────────────────────────────────────────────────
-function MidiRow({ clip, cols, rowH, zebra, selected, isFl, onToggle, onDownload, onCategoryChange }: {
+function MidiRow({ clip, cols, rowH, zebra, selected, isFl, onToggle, onDownload, onCategoryChange, dragPaths }: {
   clip: MidiClip; cols: string; rowH: number; zebra: boolean; selected: boolean; isFl: boolean;
   onToggle: () => void; onDownload: () => void; onCategoryChange: (cat: string) => void;
+  dragPaths: (string | undefined)[];
 }) {
   const t = useT();
   const [hover, setHover] = React.useState(false);
@@ -459,6 +472,7 @@ function MidiRow({ clip, cols, rowH, zebra, selected, isFl, onToggle, onDownload
     <div
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
+      {...fileDragProps(() => dragPaths)}
       style={{ display: "grid", gridTemplateColumns: cols, alignItems: "center", gap: COL_GAP, height: rowH, padding: isFl ? "6px 12px" : "6px 14px", borderBottom: isFl ? "1px solid var(--line-work)" : undefined, background: rowBg, boxShadow, transition: isFl ? undefined : "background 100ms" }}
     >
       {/* Checkbox */}

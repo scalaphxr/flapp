@@ -79,7 +79,7 @@ func (a *Analyzer) Analyze(ctx context.Context, path string) (domain.AudioFeatur
 	ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(path)), ".")
 	feat := domain.AudioFeatures{}
 
-	if ext == "wav" || ext == "aiff" || ext == "aif" || ext == "mp3" {
+	if ext == "wav" || ext == "aiff" || ext == "aif" || ext == "mp3" || ext == "flac" || ext == "ogg" || ext == "oga" {
 		p, err := a.decode(path, ext)
 		if err == nil && p != nil && len(p.samples) > 0 {
 			feat = a.featuresFromPCM(p)
@@ -113,6 +113,10 @@ func (a *Analyzer) decode(path, ext string) (*pcm, error) {
 		return decodeAIFF(f, a.MaxAnalysisSamples)
 	case "mp3":
 		return decodeMP3(f, a.MaxAnalysisSamples)
+	case "flac":
+		return decodeFLAC(f, a.MaxAnalysisSamples)
+	case "ogg", "oga":
+		return decodeOGG(f, a.MaxAnalysisSamples)
 	}
 	return nil, errNoPCM
 }
@@ -310,7 +314,7 @@ func (a *Analyzer) AnalyzeAll(ctx context.Context, path string) (domain.AudioFea
 	ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(path)), ".")
 	feat := domain.AudioFeatures{}
 
-	if ext == "wav" || ext == "aiff" || ext == "aif" || ext == "mp3" {
+	if ext == "wav" || ext == "aiff" || ext == "aif" || ext == "mp3" || ext == "flac" || ext == "ogg" || ext == "oga" {
 		t0 := time.Now()
 		p, err := a.decode(path, ext)
 		decNs := time.Since(t0).Nanoseconds()
