@@ -30,8 +30,6 @@ export function SamplesPage() {
   const { playingId, toggle } = usePlayerStore();
   const jobs = useJobsStore();
   const { settings } = useSettingsStore();
-  const theme = settings?.theme ?? "fl";
-  const isFl = theme === "fl";
 
   // ── Sidebar ────────────────────────────────────────────────────────────────
   // "" = все звуки, "midi" = MIDI-секция, любая другая строка = фильтр по категории
@@ -314,67 +312,28 @@ export function SamplesPage() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, gap: isFl ? 0 : 14, padding: isFl ? 14 : 0 }}>
+    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, gap: 14, padding: 0 }}>
 
       {/* Top controls */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: isFl ? 14 : 0 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 0 }}>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           {/* Import toggle button */}
-          {isFl ? (
-            <button
-              onClick={() => setScanOpen((v) => !v)}
-              style={{
-                display: "flex", alignItems: "center", gap: 7,
-                height: 38, padding: "0 14px", flexShrink: 0,
-                background: "linear-gradient(var(--btn-hi),var(--btn))",
-                border: "1px solid var(--chrome-lo)", borderRadius: 7,
-                color: "var(--ink)", font: "600 13px var(--font-sans)",
-                cursor: "pointer",
-                boxShadow: "inset 0 1px 0 rgba(255,255,255,.5),0 1px 2px rgba(0,0,0,.25)",
-              }}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                {scanOpen ? <path d="M18 6L6 18M6 6l12 12"/> : <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>}
-              </svg>
-              {scanOpen ? t.samples.closeScan : t.samples.scan}
-            </button>
-          ) : (
-            <Button
-              variant="primary"
-              style={{ background: "var(--accent-amber)", borderColor: "var(--accent-amber)" }}
-              icon={scanOpen ? <Icons.X /> : <Icons.Wave />}
-              onClick={() => setScanOpen((v) => !v)}
-            >
-              {scanOpen ? t.samples.closeScan : t.samples.scan}
-            </Button>
-          )}
+          <Button
+            variant="primary"
+            style={{ background: "var(--accent-amber)", borderColor: "var(--accent-amber)" }}
+            icon={scanOpen ? <Icons.X /> : <Icons.Wave />}
+            onClick={() => setScanOpen((v) => !v)}
+          >
+            {scanOpen ? t.samples.closeScan : t.samples.scan}
+          </Button>
           {/* Wand button */}
-          {isFl ? (
-            <button
-              onClick={() => setShowSmart((v) => !v)}
-              title={t.library.smartSearch}
-              style={{
-                width: 38, height: 38, flexShrink: 0,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                background: showSmart ? "linear-gradient(var(--accent),var(--accent-deep,#e8651e))" : "linear-gradient(var(--btn-hi),var(--btn))",
-                border: "1px solid var(--chrome-lo)", borderRadius: 7,
-                color: showSmart ? "#fff" : "var(--accent-deep,#e8651e)", cursor: "pointer",
-                boxShadow: "inset 0 1px 0 rgba(255,255,255,.5),0 1px 2px rgba(0,0,0,.25)",
-              }}
-            >
-              <Icons.Wand width={16} height={16} />
-            </button>
-          ) : (
-            <>
-              <Checkbox checked={favOnly} onChange={setFavOnly} label={t.library.favOnly} />
-              <Button
-                variant={showSmart ? "primary" : "ghost"}
-                icon={<Icons.Wand />}
-                onClick={() => setShowSmart((v) => !v)}
-                title={t.library.smartSearch}
-              />
-            </>
-          )}
+          <Checkbox checked={favOnly} onChange={setFavOnly} label={t.library.favOnly} />
+          <Button
+            variant={showSmart ? "primary" : "ghost"}
+            icon={<Icons.Wand />}
+            onClick={() => setShowSmart((v) => !v)}
+            title={t.library.smartSearch}
+          />
         </div>
 
         {showSmart ? (
@@ -405,8 +364,8 @@ export function SamplesPage() {
 
       {/* Scan panel */}
       {scanOpen ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10, flexShrink: 0, marginBottom: isFl ? 12 : 0 }}>
-          <div style={{ display: "flex", gap: isFl ? 12 : 10, height: isFl ? 200 : 240, overflowX: "auto" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, flexShrink: 0, marginBottom: 0 }}>
+          <div style={{ display: "flex", gap: 10, height: 240, overflowX: "auto" }}>
 
             {/* Block 1 — Drop zone */}
             <Card padding={0} style={{ flex: 1, minWidth: 210, overflow: "hidden" }}>
@@ -510,44 +469,28 @@ export function SamplesPage() {
       ) : null}
 
       {/* Sidebar + content */}
-      <div style={isFl
-        ? { display: "grid", gridTemplateColumns: "194px 1fr", gap: 12, flex: 1, minHeight: 0 }
-        : { display: "flex", flex: 1, minHeight: 0 }
-      }>
+      <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
 
         {/* LEFT SIDEBAR */}
         <div style={{
-          width: isFl ? 194 : 180,
+          width: 180,
           flexShrink: 0,
-          background: isFl ? "var(--browser)" : "var(--surface-1)",
-          border: isFl ? "1px solid var(--line-work)" : "none",
-          borderRight: isFl ? "none" : "1px solid var(--border-soft)",
-          borderRadius: isFl ? 9 : 0,
-          padding: isFl ? "8px 0" : 0,
+          background: "var(--surface-1)",
+          border: "none",
+          borderRight: "1px solid var(--border-soft)",
+          borderRadius: 0,
+          padding: 0,
           overflowY: "auto",
           display: "flex",
           flexDirection: "column",
-          boxShadow: isFl ? "inset 0 0 0 1px rgba(0,0,0,.25), 0 2px 6px rgba(0,0,0,.25)" : "none",
-          alignSelf: isFl ? "start" : "stretch",
+          boxShadow: "none",
+          alignSelf: "stretch",
         }}>
-          {isFl && (
-            <div style={{
-              display: "flex", alignItems: "center", gap: 7,
-              padding: "4px 10px 8px",
-              font: "700 10px var(--font-sans)",
-              letterSpacing: "1.5px",
-              color: "var(--ink-on-work-dim)",
-            }}>
-              <Icons.Folder width={13} height={13} />
-              BROWSER
-            </div>
-          )}
           <SidebarItem
             label={t.common.all}
             count={counts[""] ?? 0}
             active={activeCategory === ""}
             onClick={() => setActiveCategory("")}
-            isFl={isFl}
           />
           {ALL_CATEGORIES.map((c) => (
             <SidebarItem
@@ -556,106 +499,28 @@ export function SamplesPage() {
               count={counts[c] ?? 0}
               active={activeCategory === c}
               onClick={() => setActiveCategory(c)}
-              isFl={isFl}
             />
           ))}
 
-          <div style={{ height: 1, background: isFl ? "var(--line-work)" : "var(--border-soft)", margin: "8px 12px" }} />
+          <div style={{ height: 1, background: "var(--border-soft)", margin: "8px 12px" }} />
 
           <SidebarItem
             label={t.midi.title}
             count={midiCount}
             active={activeCategory === "midi"}
             onClick={() => setActiveCategory("midi")}
-            prefix={isFl ? undefined : "🎹"}
-            isFl={isFl}
-            isMidi
+            prefix="🎹"
           />
         </div>
 
         {/* MAIN CONTENT */}
-        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: isFl ? 0 : 14, overflow: "hidden" }}>
+        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 14, overflow: "hidden" }}>
           {activeCategory === "midi" ? (
             <MidiSection />
           ) : (
             <>
               {/* Table + detail panel */}
-              <div style={{ display: "flex", gap: isFl ? 12 : 16, flex: 1, minHeight: 0 }}>
-                {isFl ? (
-                  <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-                    {/* Search bar */}
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0, marginBottom: 10 }}>
-                      <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 9, height: 38, padding: "0 14px", background: "var(--work-3)", border: "1px solid var(--line-work)", borderRadius: 7, boxShadow: "inset 0 2px 5px rgba(0,0,0,.4)" }}>
-                        <Icons.Search width={15} height={15} style={{ color: "var(--ink-on-work-dim)", flexShrink: 0 }} />
-                        <input
-                          value={q}
-                          onChange={(e) => setQ(e.target.value)}
-                          placeholder={t.common.search}
-                          style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: "var(--ink-on-work)", font: "500 14px var(--font-sans)" }}
-                        />
-                      </div>
-                    </div>
-                    <SoundTable
-                      samples={displayItems}
-                      playingId={playingId}
-                      onPlay={toggle}
-                      selectable
-                      selected={selected}
-                      onToggleSelect={toggleSelect}
-                      onRowClick={openDetail}
-                      onCategoryChange={changeCategoryById}
-                      activeId={activeId}
-                      emptyText={total === 0 ? t.samples.noSounds : t.common.nothingFound}
-                      showWaveform
-                      sortBy={sortBy}
-                      sortOrder={sortOrder}
-                      onSort={handleSort}
-                    />
-                    {/* FL table footer */}
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 14px", height: 42, background: "linear-gradient(var(--work-2),var(--work-3))", borderTop: "1px solid var(--line-work)", flexShrink: 0 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <span style={{ font: "400 12px var(--font-mono)", color: "var(--ink-on-work-dim)" }}>
-                          {total} {t.harvest.statSounds}
-                          {stats ? ` · ${stats.duplicates ?? 0} dupes · ${formatBytes(stats.bytesSaved ?? 0)} saved` : ""}
-                        </span>
-                        {selected.size > 0 && (
-                          <span style={{ font: "400 12px var(--font-mono)", color: "var(--accent)" }}>
-                            · {selected.size} {t.samples.selCount} · {formatBytes(selectedSize)}
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                        {selected.size > 0 && (
-                          <button
-                            onClick={exportToFolder}
-                            style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", cursor: "pointer", font: "600 12px var(--font-sans)", color: "var(--accent)" }}
-                          >
-                            <Icons.Save width={13} height={13} />
-                            {t.samples.exportFolder}
-                          </button>
-                        )}
-                        <button
-                          onClick={() => {
-                            const allSelected = displayItems.length > 0 && displayItems.every((s) => selected.has(s.id));
-                            setSelected(allSelected ? new Set() : new Set(displayItems.map((s) => s.id)));
-                          }}
-                          disabled={total === 0 || running}
-                          style={{ display: "flex", alignItems: "center", gap: 5, background: "none", border: "none", cursor: total === 0 || running ? "default" : "pointer", font: "600 12px var(--font-sans)", color: total === 0 || running ? "var(--ink-dim)" : "var(--ink-on-work)", opacity: total === 0 || running ? 0.4 : 1 }}
-                        >
-                          {displayItems.length > 0 && displayItems.every((s) => selected.has(s.id)) ? t.samples.clearSel : t.samples.selectAll}
-                        </button>
-                        <button
-                          onClick={clearLibrary}
-                          disabled={total === 0 || running}
-                          style={{ display: "flex", alignItems: "center", gap: 7, background: "none", border: "none", cursor: total === 0 || running ? "default" : "pointer", font: "600 12px var(--font-sans)", color: total === 0 || running ? "var(--ink-dim)" : "var(--rec)", opacity: total === 0 || running ? 0.4 : 1 }}
-                        >
-                          <Icons.Trash width={13} height={13} />
-                          {t.samples.clearLib}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
+              <div style={{ display: "flex", gap: 16, flex: 1, minHeight: 0 }}>
                 <Card padding={0} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden", paddingTop: 14 }}>
                   <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", padding: "0 var(--space-3) var(--space-3)" }}>
                     <div style={{ marginBottom: "var(--space-2)" }}>
@@ -685,9 +550,8 @@ export function SamplesPage() {
                     />
                   </div>
                 </Card>
-                )}
 
-                {active && !isFl ? (
+                {active ? (
                   <DetailPanel
                     active={active}
                     similar={similar}
@@ -700,8 +564,7 @@ export function SamplesPage() {
                 ) : null}
               </div>
 
-              {/* Bottom bar — only for non-FL theme */}
-              {!isFl && selected.size > 0 ? (
+              {selected.size > 0 ? (
                 <Card padding={0} style={{ flexShrink: 0 }}>
                   <div style={{ padding: "10px 16px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                     <span style={{ fontSize: "var(--fs-sm)", color: "var(--accent)", fontWeight: "var(--fw-semibold)" as any }}>
@@ -760,7 +623,7 @@ export function SamplesPage() {
                     </Button>
                   </div>
                 </Card>
-              ) : !isFl ? (
+              ) : (
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 12px", flexShrink: 0 }}>
                   <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-faint)" }}>
                     {total} {t.harvest.statSounds}
@@ -777,7 +640,7 @@ export function SamplesPage() {
                     </Button>
                   </div>
                 </div>
-              ) : null}
+              )}
 
               {donePath ? (
                 <div style={{ padding: "10px 14px", borderRadius: "var(--radius-md)", background: "color-mix(in srgb, var(--positive) 14%, transparent)", flexShrink: 0 }}>
@@ -801,62 +664,14 @@ function SidebarItem({
   active,
   onClick,
   prefix,
-  isFl,
-  isMidi,
 }: {
   label: string;
   count: number;
   active: boolean;
   onClick: () => void;
   prefix?: string;
-  isFl?: boolean;
-  isMidi?: boolean;
 }) {
   const [hovered, setHovered] = React.useState(false);
-
-  if (isFl) {
-    return (
-      <button
-        onClick={onClick}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-        style={{
-          display: "flex", alignItems: "center", gap: 9,
-          height: 30, padding: "0 10px",
-          borderRadius: 6, margin: "1px 4px",
-          border: "none", cursor: "pointer",
-          font: "500 12.5px var(--font-sans)",
-          background: active
-            ? "rgba(255,138,60,.18)"
-            : hovered ? "rgba(255,255,255,.05)" : "transparent",
-          color: active ? "var(--accent)" : "var(--ink-on-work)",
-          width: "calc(100% - 8px)",
-          textAlign: "left",
-          transition: "background 100ms",
-          minWidth: 0,
-        }}
-      >
-        {isMidi
-          ? <Icons.Midi width={13} height={13} style={{ opacity: .85, flexShrink: 0 }} />
-          : <Icons.Folder width={13} height={13} style={{ opacity: .85, flexShrink: 0 }} />
-        }
-        <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {label}
-        </span>
-        <span style={{
-          fontSize: "var(--fs-caption)",
-          fontFamily: "var(--font-mono)",
-          padding: "1px 6px",
-          borderRadius: 4,
-          background: active ? "rgba(255,138,60,.25)" : "rgba(255,255,255,.08)",
-          color: active ? "var(--accent)" : "var(--ink-on-work-dim)",
-          flexShrink: 0,
-        }}>
-          {count}
-        </span>
-      </button>
-    );
-  }
 
   return (
     <button
