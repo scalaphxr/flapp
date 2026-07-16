@@ -1,6 +1,5 @@
 import React from "react";
 import { Icons, Tabs, type TabItem } from "@/shared/ui";
-import { useSettingsStore } from "@/shared/model/settings";
 import { isTauri } from "@/shared/lib/tauri";
 
 interface TopBarProps {
@@ -10,8 +9,6 @@ interface TopBarProps {
 }
 
 export function TopBar(props: TopBarProps) {
-  const theme = useSettingsStore((s) => s.settings?.theme ?? "warm-dark");
-  if (theme === "fl") return <DawTopBar {...props} />;
   return <CleanTopBar {...props} />;
 }
 
@@ -153,104 +150,6 @@ function CleanTopBar({ tabs, active, onChange }: TopBarProps) {
 
       {/* Справа: кнопки управления окном */}
       <div style={{ width: 200, display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
-        <WindowControls />
-      </div>
-    </div>
-  );
-}
-
-// ── DAW TopBar (FL-тема) ───────────────────────────────────────────────────────
-
-function DawTopBar({ tabs, active, onChange }: TopBarProps) {
-  return (
-    <div style={{ flexShrink: 0 }}>
-      <MenuBar tabs={tabs} active={active} onChange={onChange} />
-    </div>
-  );
-}
-
-// ── Меню-бар (42px) ───────────────────────────────────────────────────────────
-
-function MenuBar({ tabs, active, onChange }: { tabs: TabItem[]; active: string; onChange: (k: string) => void }) {
-  const onDblClick = useDblClickMaximize();
-
-  return (
-    <div
-      // Вся полоса — зона перетаскивания; кнопки внутри перехватывают клики первыми
-      data-tauri-drag-region=""
-      onDoubleClick={onDblClick}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        height: 42,
-        flexShrink: 0,
-        background: "linear-gradient(var(--chrome-hi), var(--chrome))",
-        borderBottom: "1px solid var(--chrome-lo)",
-        padding: "0 12px",
-        gap: 18,
-        boxShadow: "inset 0 1px 0 rgba(255,255,255,.55)",
-      }}
-    >
-      {/* Логотип */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <div
-          style={{
-            width: 20, height: 20, borderRadius: 5,
-            background: "linear-gradient(135deg, var(--accent), var(--accent-deep, #e8651e))",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            boxShadow: "inset 0 1px 0 rgba(255,255,255,.5), 0 1px 2px rgba(0,0,0,.35)",
-            flexShrink: 0,
-          }}
-        >
-          <Icons.Wave width={13} height={13} style={{ color: "#fff" }} />
-        </div>
-        <span style={{ font: "700 14px/1 var(--font-sans)", color: "var(--ink)", letterSpacing: ".6px" }}>
-          Flapp
-        </span>
-      </div>
-
-      {/* Вкладки */}
-      <div style={{ display: "flex", gap: 5 }}>
-        {tabs.map((tab) => {
-          const isActive = tab.key === active;
-          return (
-            <button
-              key={tab.key}
-              onClick={() => onChange(tab.key)}
-              style={{
-                display: "flex", alignItems: "center", gap: 7,
-                height: 34, padding: "0 15px", borderRadius: 6,
-                font: "600 13px var(--font-sans)",
-                letterSpacing: ".3px", cursor: "pointer",
-                border: "1px solid",
-                transition: "none",
-                ...(isActive
-                  ? {
-                      borderColor: "var(--accent-deep, #e8651e)",
-                      background: "linear-gradient(var(--accent), var(--accent-deep, #e8651e))",
-                      color: "#fff",
-                      boxShadow: "inset 0 1px 0 rgba(255,255,255,.4), 0 0 14px rgba(255,138,60,.5), inset 0 -2px 4px rgba(0,0,0,.18)",
-                    }
-                  : {
-                      borderColor: "var(--chrome-lo)",
-                      background: "linear-gradient(var(--btn-hi), var(--btn))",
-                      color: "var(--ink)",
-                      boxShadow: "inset 0 1px 0 rgba(255,255,255,.5), 0 1px 2px rgba(0,0,0,.2)",
-                    }),
-              }}
-            >
-              <span style={{ display: "inline-flex" }}>{tab.icon}</span>
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Правый край: версия + кнопки управления окном */}
-      <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
-        <span style={{ font: "400 11px var(--font-mono)", color: "var(--ink-dim)" }}>
-          flapp 0.1.0
-        </span>
         <WindowControls />
       </div>
     </div>
