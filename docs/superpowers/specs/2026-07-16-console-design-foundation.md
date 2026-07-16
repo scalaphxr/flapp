@@ -18,7 +18,10 @@
 |---|---|---|
 | Стили инлайном в JSX | `Button.tsx`, `Card.tsx`, `TopBar.tsx`, все страницы | Перекрасить приложение = переписать 10 000 строк вручную |
 | `:hover`/`:active` через `useState` | `Button.tsx:57`, `TopBar.tsx:72` | Ре-рендер React на движение мыши |
-| Ветка `isFl` в 6 файлах | `TopBar.tsx:14`, `SamplesPage.tsx:34`, `MidiSection.tsx:57`, `AnalyticsPage.tsx:22`, `PlayerPage.tsx:2224`, `SettingsPage.tsx:138` | Каждый компонент форкается надвое |
+| Ветка `isFl` в 7 файлах + FL-токены в 9 | `TopBar.tsx:14`, `SamplesPage.tsx:34`, `MidiSection.tsx:57`, `AnalyticsPage.tsx:22`, `PlayerPage.tsx:2224`, `SettingsPage.tsx:138`, `SoundTable.tsx:26` (проп); токены ещё и в `base.css`, `tokens.css` | ~315 использований FL-токенов. Каждый компонент форкается надвое |
+| FL-ветка `SoundTable` обходит i18n | `SoundTable.tsx:161-163` — `isFl ? "SOUND TYPE" : t.harvest.colType` | В дефолтной теме заголовки таблицы всегда английские, язык игнорируется |
+| `var(--border)` не определён, используется 17 раз | все в `PlayerPage.tsx` (`:651`, `:932`, `:1080`, `:1705`, `:1732`, …) | Невалидный `var()` рушит объявление целиком — эти рамки не рисуются |
+| `--accent-deep` (11), `--fw-normal`, `--border-card` не определены | `PlayerPage.tsx`, `TopBar.tsx:199` | `--accent-deep` спасается фолбэком `#e8651e` — FL-оранжевый прибит гвоздями |
 | FL — дефолт, но его нет в `ThemePicker` | `settings.ts:23` против `SettingsPage.tsx:670-672` | Старт в FL, вернуться в него невозможно |
 | FOUC-скрипт подменяет `warm-dark` → `fl` | `index.html` | Выбранная тема вспыхивает чужой при запуске |
 | `fonts.css` не импортируется | `main.tsx:4-5` | `@font-face` для Geist мёртв, 140 КБ на диске не используются |
@@ -126,7 +129,7 @@ Tailwind отклонён: пришлось бы перекладывать то
 ### 4.1 Токены (`app/styles/tokens.css`)
 
 Файл переписывается: четыре `[data-theme]` блока схлопываются в один `:root`.
-Ожидаемый размер — ~120 строк вместо 445.
+Ожидаемый размер — ~180 строк вместо 445.
 
 - Базовая палитра Console: `--bg-base: #0E0F11`, `--bg-sunken: #0A0B0C`,
   `--surface-1: #141619`, `--surface-2: #1A1D21`, `--surface-3: #22262B`
@@ -182,21 +185,42 @@ Tailwind отклонён: пришлось бы перекладывать то
   заменить на `:hover`/`:active` в CSS
 - Компонентные токены (`--btn-primary-bg` и соседи) больше не нужны: они существовали,
   чтобы FL-тема переопределяла кнопки. Схлопнуть в один набор.
+- `ProgressBar.tsx:32` заливает полосу градиентом `--accent` → `--accent-amber`.
+  В Console градиента нет: плоский `--accent`. Токен `--accent-amber` удаляется.
+- `Input.tsx:10`, `Checkbox.tsx:13`, `PlayButton.tsx:13`, `Tabs.tsx:51` — у каждого свой
+  `useState` под hover/focus. Все уходят: `:hover` и `:focus-within` в CSS.
 - `Icons.tsx` не трогаем — там разметка SVG, а не стили
 
 ### 4.6 Снос FL
 
-Из шести файлов удаляется ветка `isFl` и всё, что за ней. Правило: **оставить не-FL ветку,
+Из семи файлов удаляется ветка `isFl` и всё, что за ней. Правило: **оставить не-FL ветку,
 удалить FL-ветку.** Никакого редизайна страниц здесь не происходит — это механическая
 операция.
+
+**Порядок обязателен: сначала ветки, потом токены.** Все цветовые токены сейчас лежат
+внутри блоков `[data-theme=…]`. Если сначала убрать тему, `data-theme` перестанет
+проставляться, ни один блок не совпадёт и приложение останется вообще без цветов.
+Поэтому FL-ветки удаляются при живых токенах (приложение продолжает работать, просто
+рисует чистые ветки в FL-палитре), и только следующим шагом токены переезжают в `:root`.
+
+Снос FL — не выброшенная работа перед фазой 2: он уменьшает `PlayerPage.tsx` до того,
+как за него возьмутся, и убирает 17 неопределённых `var(--border)`.
 
 - `TopBar.tsx`: удалить `DawTopBar`, `MenuBar` и развилку `if (theme === "fl")`.
   `WindowControls` остаётся, но переводится на CSS Modules (сейчас там ручные
   `onMouseDown`/`onMouseUp`, дёргающие `style.background`)
+- `SoundTable.tsx`: удалить проп `isFl` (`:26`, `:54`) и все ветки. Заодно чинится
+  обход i18n на `:161-163` — заголовки начинают слушаться языка
 - `SamplesPage.tsx`, `MidiSection.tsx`, `AnalyticsPage.tsx`, `PlayerPage.tsx`,
   `SettingsPage.tsx`: удалить `isFl` и FL-ветки
+- `PlayerPage.tsx`: 17 использований `var(--border)` заменить на `var(--border-soft)`;
+  `var(--accent-deep, #e8651e)` удаляется вместе с FL-ветками
 - `base.css`: удалить блок `[data-theme="fl"]`, `.fl-rack`, `@keyframes fl-*`
-- `categories.ts`: `ColorGroup` — `"bass"` → `"loop"`, обновить `CATEGORY_GROUP` и `GROUP_HEX`
+- `categories.ts`: `ColorGroup` — `"bass"` → `"loop"`, обновить `CATEGORY_GROUP` и `GROUP_HEX`.
+  Комментарий на `:12` устарел («13-group mapping» при 12 группах) — поправить
+
+**Неопределённые токены-сироты** (`--border`, `--accent-deep`, `--fw-normal`,
+`--border-card`) после сноса FL не должны остаться ни одного. Проверяется грепом.
 
 ---
 
