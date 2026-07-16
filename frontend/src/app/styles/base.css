@@ -97,45 +97,8 @@ input, button, textarea, select { font-family: var(--font-sans); }
   * { transition: none !important; animation: none !important; }
 }
 
-/* ── FL theme overrides ─────────────────────────────────────────── */
-[data-theme="fl"] .app-main {
-  padding: 0;
+/* числа в колонках: моноширинные и одинаковой ширины */
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
 }
-
-[data-theme="fl"] * {
-  scrollbar-width: thin;
-  scrollbar-color: var(--groove) transparent;
-}
-[data-theme="fl"] *::-webkit-scrollbar { width: 13px; height: 13px; }
-[data-theme="fl"] *::-webkit-scrollbar-track { background: var(--work-3); }
-[data-theme="fl"] *::-webkit-scrollbar-thumb {
-  background: linear-gradient(var(--btn-hi), var(--btn-lo));
-  border: 1px solid var(--chrome-lo);
-  border-radius: 3px;
-}
-
-@keyframes fl-playhead  { from { left: 0 } to { left: 100% } }
-@keyframes fl-led-pulse { 0%,100% { opacity:1 } 50% { opacity:.3 } }
-
-/* FL rack panel — card with corner screws */
-.fl-rack {
-  position: relative;
-  background: linear-gradient(var(--panel-hi), var(--panel));
-  border: 1px solid var(--panel-lo);
-  border-radius: 11px;
-  padding: 18px 20px;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 3px 8px rgba(0,0,0,.3);
-}
-.fl-rack::before, .fl-rack::after,
-.fl-rack > .fl-screw-br, .fl-rack > .fl-screw-bl {
-  content: "";
-  position: absolute;
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 35%, var(--btn-hi), var(--panel-lo));
-  box-shadow: inset 0 0 0 1px rgba(0,0,0,.2);
-}
-.fl-rack::before  { top: 9px; left: 9px; }
-.fl-rack::after   { top: 9px; right: 9px; }
-.fl-rack > .fl-screw-bl { bottom: 9px; left: 9px; }
-.fl-rack > .fl-screw-br { bottom: 9px; right: 9px; }

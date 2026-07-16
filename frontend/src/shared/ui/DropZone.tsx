@@ -32,8 +32,8 @@ export function DropZone({ title, subtitle, icon, active = false, onClick, style
         borderRadius: "var(--radius-lg)",
         border: "2px dashed",
         borderColor: isHot ? "var(--accent)" : "var(--border-strong)",
-        background: isHot ? "var(--accent-softer)" : "var(--surface-1)",
-        boxShadow: isHot ? "var(--glow-accent-soft)" : "none",
+        background: isHot ? "var(--accent-soft)" : "var(--surface-1)",
+        boxShadow: "none",
         transition: "var(--transition-base)",
         ...style,
       }}

@@ -320,7 +320,7 @@ export function SamplesPage() {
           {/* Import toggle button */}
           <Button
             variant="primary"
-            style={{ background: "var(--accent-amber)", borderColor: "var(--accent-amber)" }}
+            style={{ background: "var(--warning)", borderColor: "var(--warning)" }}
             icon={scanOpen ? <Icons.X /> : <Icons.Wave />}
             onClick={() => setScanOpen((v) => !v)}
           >
@@ -442,7 +442,7 @@ export function SamplesPage() {
               background: "rgba(255,180,0,.13)",
               border: "1px solid rgba(255,180,0,.35)",
               fontSize: "var(--fs-caption)",
-              color: "var(--accent-amber, #e8a020)",
+              color: "var(--warning)",
               lineHeight: 1.4,
             }}>
               {t.harvest.flpNoDrumkitsWarning}
@@ -452,7 +452,7 @@ export function SamplesPage() {
           {running ? (
             <Button variant="ghost" full icon={<Icons.Stop />} onClick={stopHarvest}>{t.common.stop}</Button>
           ) : (
-            <Button variant="primary" full icon={<Icons.Search />} disabled={queue.length === 0} onClick={runHarvest} style={{ background: "var(--accent-amber)", borderColor: "var(--accent-amber)" }}>
+            <Button variant="primary" full icon={<Icons.Search />} disabled={queue.length === 0} onClick={runHarvest} style={{ background: "var(--warning)", borderColor: "var(--warning)" }}>
               {t.harvest.run}
             </Button>
           )}
@@ -846,7 +846,7 @@ function StarRating({ value, onChange }: { value: number; onChange: (v: number) 
             key={n}
             onMouseEnter={() => setHover(n)}
             onClick={() => onChange(value === n ? 0 : n)}
-            style={{ border: "none", background: "transparent", cursor: "pointer", padding: 2, color: lit ? "var(--accent-amber)" : "var(--text-faint)" }}
+            style={{ border: "none", background: "transparent", cursor: "pointer", padding: 2, color: lit ? "var(--warning)" : "var(--text-faint)" }}
           >
             <Icons.Star fill={lit ? "currentColor" : "none"} />
           </button>

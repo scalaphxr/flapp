@@ -221,11 +221,9 @@ function SoundRow({
     : active
     ? "var(--surface-active)"
     : checked
-    ? "var(--accent-softer)"
+    ? "var(--accent-soft)"
     : hover
     ? "var(--row-hover)"
-    : zebra
-    ? "var(--row-zebra)"
     : "transparent";
 
   // Высота строки фиксирована — виртуализация опирается на константу ROW_H.

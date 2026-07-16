@@ -431,7 +431,7 @@ function MidiRow({ clip, cols, rowH, zebra, selected, onToggle, onDownload, onCa
   const canPlay = hasSample || fallbackPiano;
   const { isPlaying, playheadSec, totalSec, play, stop, seek } = useMidiPlayer(clip.id, notesData, hasSample, selfCut, fallbackPiano);
 
-  const rowBg = isPlaying ? "var(--accent-soft)" : selected ? "var(--accent-softer)" : hover ? "var(--row-hover)" : zebra ? "var(--row-zebra)" : "transparent";
+  const rowBg = isPlaying ? "var(--accent-soft)" : selected ? "var(--accent-soft)" : hover ? "var(--row-hover)" : "transparent";
 
   return (
     <div

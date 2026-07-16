@@ -104,7 +104,7 @@ export function AnalyticsPage() {
                   <XAxis dataKey="name" angle={-38} textAnchor="end" interval={0} height={70}
                     tick={{ fill: cv("--text-muted"), fontSize: 11 }} stroke={cv("--border-medium")} />
                   <YAxis allowDecimals={false} tick={{ fill: cv("--text-faint"), fontSize: 11 }} stroke={cv("--border-medium")} width={36} />
-                  <Tooltip cursor={{ fill: cv("--accent-softer") }}
+                  <Tooltip cursor={{ fill: cv("--accent-soft") }}
                     contentStyle={{ background: cv("--surface-2"), border: `1px solid ${cv("--border-medium")}`, borderRadius: 10, fontSize: 12 }}
                     labelStyle={{ color: cv("--text-strong") }} itemStyle={{ color: cv("--text-body") }}
                     formatter={(v: number) => [`${v} sounds`, ""]} />
@@ -141,7 +141,7 @@ export function AnalyticsPage() {
                     <BarChart data={bpmData} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
                       <XAxis dataKey="name" tick={{ fill: cv("--text-muted"), fontSize: 11 }} stroke={cv("--border-medium")} />
                       <YAxis allowDecimals={false} tick={{ fill: cv("--text-faint"), fontSize: 11 }} stroke={cv("--border-medium")} width={36} />
-                      <Tooltip cursor={{ fill: cv("--accent-softer") }}
+                      <Tooltip cursor={{ fill: cv("--accent-soft") }}
                         contentStyle={{ background: cv("--surface-2"), border: `1px solid ${cv("--border-medium")}`, borderRadius: 10, fontSize: 12 }}
                         labelStyle={{ color: cv("--text-strong") }} itemStyle={{ color: cv("--text-body") }}
                         formatter={(v: number) => [`${v} sounds`, ""]} />

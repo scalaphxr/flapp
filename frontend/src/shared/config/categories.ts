@@ -8,7 +8,7 @@ export type ColorGroup =
   | "perc"
   | "vox"
   | "fx"
-  | "bass"      // repurposed for Loop
+  | "loop"
   | "drumloop"
   | "unsorted";
 
@@ -28,7 +28,7 @@ const CATEGORY_GROUP: Record<string, ColorGroup> = {
   Perc:       "perc",
   Vox:        "vox",
   FX:         "fx",
-  Loop:       "bass",      // --cat-bass (dusty violet) used for Loop
+  Loop:       "loop",
   "Drum Loop":"drumloop",
 };
 
@@ -53,7 +53,7 @@ export const GROUP_HEX: Record<ColorGroup, string> = {
   perc:       "#A8B27A",
   vox:        "#C79BC4",
   fx:         "#C98BA8",
-  bass:       "#B79BD4",  // Loop
+  loop:       "#8F7CF8",
   drumloop:   "#C9A06A",
   unsorted:   "#998C7C",
 };

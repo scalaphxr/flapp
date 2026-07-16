@@ -1,6 +1,5 @@
 // Settings store. Loads settings from the backend on startup, keeps them in
-// memory, and persists changes. Reflects language choice into i18n store and
-// applies the active theme to document.documentElement immediately.
+// memory, and persists changes. Reflects language choice into the i18n store.
 
 import { create } from "zustand";
 import { api } from "@/shared/api/client";
@@ -20,6 +19,7 @@ interface SettingsState {
 
 const fallback: Settings = {
   language: "en",
+  // Рудимент: бэкенд хранит поле, фронт его не читает. Тема одна — Console.
   theme: "fl",
   exportDir: "",
   midiOutputDir: "",
@@ -51,13 +51,6 @@ const fallback: Settings = {
   ytPrivacy: "public",
 };
 
-// Применяет тему через data-атрибут на <html> и кеширует в localStorage
-// для предотвращения вспышки чужой темы (FOUC) при следующем запуске.
-function applyTheme(theme: string) {
-  document.documentElement.setAttribute("data-theme", theme);
-  try { localStorage.setItem("flapp-theme", theme); } catch { /* игнорируем в sandbox */ }
-}
-
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   settings: null,
   loading: false,
@@ -69,10 +62,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       const s = await api.getSettings();
       set({ settings: s, loading: false, fromServer: true });
       useI18nStore.getState().setLang((s.language as Lang) || "en");
-      applyTheme(s.theme ?? "fl");
     } catch {
       set({ settings: fallback, loading: false });
-      applyTheme(fallback.theme);
     }
   },
 
@@ -87,9 +78,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     set({ settings: next });
     if (patch.language) {
       useI18nStore.getState().setLang(patch.language as Lang);
-    }
-    if (patch.theme) {
-      applyTheme(patch.theme);
     }
     if (!get().fromServer) {
       return; // бэкенд недоступен — меняем только локально, без риска затирания
