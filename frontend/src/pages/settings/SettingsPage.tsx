@@ -135,7 +135,6 @@ export function SettingsPage() {
   }, []);
 
   const s = settings;
-  const isFl = s?.theme === "fl";
 
   async function patch(p: Partial<Settings>) {
     await update(p);
@@ -153,23 +152,16 @@ export function SettingsPage() {
     );
   }
 
-  // Helper: wrap a section in either Card or FL rack panel
-  const Section = isFl ? FlSection : CardSection;
-  const ChkBox = isFl ? FlMetaCheckbox : Checkbox;
-
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: isFl ? 14 : "var(--space-6)", maxWidth: 720, padding: isFl ? "20px 24px" : 0 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)", maxWidth: 720, padding: 0 }}>
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
-        {!isFl && (
-          <div>
-            <h1 className="page-title">{t.settings.title}</h1>
-            <p className="page-desc">{t.settings.desc}</p>
-          </div>
-        )}
+        <div>
+          <h1 className="page-title">{t.settings.title}</h1>
+          <p className="page-desc">{t.settings.desc}</p>
+        </div>
         <span
           style={{
-            fontSize: isFl ? "12px" : "var(--fs-sm)",
-            fontFamily: isFl ? "var(--font-sans)" : undefined,
+            fontSize: "var(--fs-sm)",
             color: "var(--positive)",
             opacity: flash ? 1 : 0,
             transition: "opacity var(--dur-base) var(--ease-out)",
@@ -182,25 +174,13 @@ export function SettingsPage() {
         </span>
       </div>
 
-      <Section label={t.settings.general}>
+      <CardSection label={t.settings.general}>
         <Field label={t.settings.language}>
-          {isFl ? (
-            <FlSelect
-              value={s.language}
-              onChange={(v) => patch({ language: v })}
-              options={[{ value: "ru", label: "Русский" }, { value: "en", label: "English" }]}
-            />
-          ) : (
-            <Select
-              value={s.language}
-              onChange={(v) => patch({ language: v })}
-              options={[{ value: "ru", label: "Русский" }, { value: "en", label: "English" }]}
-            />
-          )}
-        </Field>
-
-        <Field label={t.settings.theme}>
-          <ThemePicker value={s.theme} onChange={(v) => patch({ theme: v })} />
+          <Select
+            value={s.language}
+            onChange={(v) => patch({ language: v })}
+            options={[{ value: "ru", label: "Русский" }, { value: "en", label: "English" }]}
+          />
         </Field>
 
         <Field label={t.settings.exportDir}>
@@ -209,117 +189,88 @@ export function SettingsPage() {
               className="mono"
               style={{
                 flex: 1,
-                height: isFl ? 36 : "var(--input-height)",
+                height: "var(--input-height)",
                 display: "flex", alignItems: "center",
                 padding: "0 14px",
-                background: isFl ? "var(--groove)" : "var(--surface-input)",
-                border: `1px solid ${isFl ? "var(--line-work)" : "var(--border-medium)"}`,
-                borderRadius: isFl ? 7 : "var(--radius-input)",
-                boxShadow: isFl ? "inset 0 2px 4px rgba(0,0,0,.35)" : undefined,
+                background: "var(--surface-input)",
+                border: "1px solid var(--border-medium)",
+                borderRadius: "var(--radius-input)",
                 fontSize: 11,
-                color: s.exportDir ? (isFl ? "var(--ink-on-work)" : "var(--text-body)") : (isFl ? "var(--ink-dim)" : "var(--text-faint)"),
+                color: s.exportDir ? "var(--text-body)" : "var(--text-faint)",
                 whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
               }}
             >
               {s.exportDir || t.common.none}
             </div>
-            {isFl ? (
-              <button
-                onClick={() => pickFolder().then((d) => { if (d) patch({ exportDir: d }); })}
-                style={{ height: 36, padding: "0 14px", display: "flex", alignItems: "center", gap: 7, background: "linear-gradient(var(--btn-hi),var(--btn))", border: "1px solid var(--chrome-lo)", borderRadius: 7, color: "var(--ink)", font: "600 12.5px var(--font-sans)", cursor: "pointer", boxShadow: "inset 0 1px 0 rgba(255,255,255,.5),0 1px 2px rgba(0,0,0,.25)" }}
-              >
-                <Icons.Folder width={13} height={13} />
-                {t.settings.pickFolder}
-              </button>
-            ) : (
-              <Button variant="secondary" icon={<Icons.Folder />} onClick={() => pickFolder().then((d) => { if (d) patch({ exportDir: d }); })}>
-                {t.settings.pickFolder}
-              </Button>
-            )}
+            <Button variant="secondary" icon={<Icons.Folder />} onClick={() => pickFolder().then((d) => { if (d) patch({ exportDir: d }); })}>
+              {t.settings.pickFolder}
+            </Button>
           </div>
         </Field>
-      </Section>
+      </CardSection>
 
-      <Section label={t.settings.processing}>
+      <CardSection label={t.settings.processing}>
         <Field label={t.settings.workers}>
-          {isFl ? (
-            <FlFader value={s.workers} min={1} max={16} step={1} onChange={(v) => patch({ workers: v })} />
-          ) : (
-            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-              <input type="range" min={1} max={16} value={s.workers} onChange={(e) => patch({ workers: Number(e.target.value) })} style={{ flex: 1, accentColor: "var(--accent)" }} />
-              <span className="mono" style={{ width: 28, textAlign: "right", color: "var(--text-body)" }}>{s.workers}</span>
-            </div>
-          )}
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <input type="range" min={1} max={16} value={s.workers} onChange={(e) => patch({ workers: Number(e.target.value) })} style={{ flex: 1, accentColor: "var(--accent)" }} />
+            <span className="mono" style={{ width: 28, textAlign: "right", color: "var(--text-body)" }}>{s.workers}</span>
+          </div>
         </Field>
 
-        <ChkBox checked={s.gpu} onChange={(v) => patch({ gpu: v })} label={t.settings.gpu} />
-        <ChkBox checked={s.autoUpdate} onChange={(v) => patch({ autoUpdate: v })} label={t.settings.autoUpdate} />
-        <ChkBox checked={s.backupOnExit} onChange={(v) => patch({ backupOnExit: v })} label={t.settings.backupOnExit} />
-      </Section>
+        <Checkbox checked={s.gpu} onChange={(v) => patch({ gpu: v })} label={t.settings.gpu} />
+        <Checkbox checked={s.autoUpdate} onChange={(v) => patch({ autoUpdate: v })} label={t.settings.autoUpdate} />
+        <Checkbox checked={s.backupOnExit} onChange={(v) => patch({ backupOnExit: v })} label={t.settings.backupOnExit} />
+      </CardSection>
 
-      <Section label={t.settings.dedup}>
+      <CardSection label={t.settings.dedup}>
         <Field label={t.settings.dedupThreshold}>
-          {isFl ? (
-            <FlFader value={s.dedupThreshold} min={0} max={100} step={1} onChange={(v) => patch({ dedupThreshold: v })} />
-          ) : (
-            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-              <input type="range" min={0} max={100} value={s.dedupThreshold} onChange={(e) => patch({ dedupThreshold: Number(e.target.value) })} style={{ flex: 1, accentColor: "var(--accent)" }} />
-              <span className="mono" style={{ width: 28, textAlign: "right", color: "var(--text-body)" }}>{s.dedupThreshold}</span>
-            </div>
-          )}
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <input type="range" min={0} max={100} value={s.dedupThreshold} onChange={(e) => patch({ dedupThreshold: Number(e.target.value) })} style={{ flex: 1, accentColor: "var(--accent)" }} />
+            <span className="mono" style={{ width: 28, textAlign: "right", color: "var(--text-body)" }}>{s.dedupThreshold}</span>
+          </div>
         </Field>
 
-        <ChkBox checked={s.deepDedup} onChange={(v) => patch({ deepDedup: v })} label={t.settings.deepDedup} />
-        <ChkBox checked={s.generateTags} onChange={(v) => patch({ generateTags: v })} label={t.settings.generateTags} />
-      </Section>
+        <Checkbox checked={s.deepDedup} onChange={(v) => patch({ deepDedup: v })} label={t.settings.deepDedup} />
+        <Checkbox checked={s.generateTags} onChange={(v) => patch({ generateTags: v })} label={t.settings.generateTags} />
+      </CardSection>
 
-      <Section label={t.settings.cache}>
+      <CardSection label={t.settings.cache}>
         <Field label={t.settings.cacheLabel}>
-          <span style={{ fontSize: isFl ? "12.5px" : "var(--fs-sm)", fontFamily: isFl ? "var(--font-sans)" : undefined, color: isFl ? "var(--ink-on-work-dim)" : "var(--text-muted)" }}>
+          <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-muted)" }}>
             {t.settings.cacheDesc}
           </span>
           <div style={{ display: "flex", alignItems: "center", gap: "var(--gap-control)", marginTop: 8 }}>
-            {isFl ? (
-              <button
-                onClick={handleCacheClear}
-                style={{ height: 34, padding: "0 14px", display: "flex", alignItems: "center", gap: 7, background: "linear-gradient(var(--btn-hi),var(--btn))", border: "1px solid var(--chrome-lo)", borderRadius: 7, color: "var(--ink)", font: "600 12.5px var(--font-sans)", cursor: "pointer", boxShadow: "inset 0 1px 0 rgba(255,255,255,.5),0 1px 2px rgba(0,0,0,.25)" }}
-              >
-                <Icons.Trash width={13} height={13} />
-                {t.settings.cacheClear}
-              </button>
-            ) : (
-              <Button variant="secondary" onClick={handleCacheClear}>
-                <Icons.Trash /> {t.settings.cacheClear}
-              </Button>
-            )}
+            <Button variant="secondary" onClick={handleCacheClear}>
+              <Icons.Trash /> {t.settings.cacheClear}
+            </Button>
             {cacheMsg && (
-              <span style={{ fontSize: isFl ? "12px" : "var(--fs-sm)", fontFamily: isFl ? "var(--font-mono)" : undefined, color: "var(--positive)" }}>
+              <span style={{ fontSize: "var(--fs-sm)", color: "var(--positive)" }}>
                 {cacheMsg}
               </span>
             )}
           </div>
         </Field>
-      </Section>
+      </CardSection>
 
-      <Section label={t.settings.ytSection}>
+      <CardSection label={t.settings.ytSection}>
         {/* Главный сценарий: креды вшиты в сборку — достаточно одной кнопки.
             Ручная настройка ключей спрятана в свёрнутый блок ниже. */}
-        <p style={{ margin: 0, fontSize: isFl ? "11.5px" : "var(--fs-sm)", lineHeight: 1.55, color: isFl ? "var(--ink-dim)" : "var(--text-faint)", maxWidth: 640 }}>
+        <p style={{ margin: 0, fontSize: "var(--fs-sm)", lineHeight: 1.55, color: "var(--text-faint)", maxWidth: 640 }}>
           {t.settings.ytEasyHint}
         </p>
 
         {/* Подключение канала + статус */}
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          <ChromeBtn isFl={isFl} onClick={handleYtConnect}>
+          <Button variant="secondary" onClick={handleYtConnect}>
             <Icons.Yt width={13} height={13} />
             {ytStatus?.connected ? t.settings.ytReconnect : t.settings.ytConnect}
-          </ChromeBtn>
+          </Button>
           {ytStatus?.connected && (
-            <ChromeBtn isFl={isFl} onClick={handleYtDisconnect}>
+            <Button variant="secondary" onClick={handleYtDisconnect}>
               {t.settings.ytDisconnect}
-            </ChromeBtn>
+            </Button>
           )}
-          <span style={{ fontSize: isFl ? "12px" : "var(--fs-sm)", fontFamily: isFl ? "var(--font-sans)" : undefined, color: authError ? "var(--rec, #ff453a)" : ytStatus?.connected ? "var(--positive)" : (isFl ? "var(--ink-dim)" : "var(--text-faint)") }}>
+          <span style={{ fontSize: "var(--fs-sm)", color: authError ? "var(--danger)" : ytStatus?.connected ? "var(--positive)" : "var(--text-faint)" }}>
             {authError
               ? `${t.settings.ytAuthFailed} ${authError}`
               : authWaiting
@@ -339,7 +290,7 @@ export function SettingsPage() {
         </div>
         {showYtAdvanced && (
           <>
-            <p style={{ margin: 0, fontSize: isFl ? "11.5px" : "var(--fs-sm)", lineHeight: 1.55, color: isFl ? "var(--ink-dim)" : "var(--text-faint)", maxWidth: 640 }}>
+            <p style={{ margin: 0, fontSize: "var(--fs-sm)", lineHeight: 1.55, color: "var(--text-faint)", maxWidth: 640 }}>
               {t.settings.ytHowTo}
             </p>
 
@@ -359,26 +310,26 @@ export function SettingsPage() {
             </div>
 
             <Field label={t.settings.ytClientId}>
-              <MonoInput isFl={isFl} value={s.ytClientId} onCommit={(v) => patch({ ytClientId: v })} placeholder="xxxxxxxx.apps.googleusercontent.com" />
+              <MonoInput value={s.ytClientId} onCommit={(v) => patch({ ytClientId: v })} placeholder="xxxxxxxx.apps.googleusercontent.com" />
             </Field>
             <Field label={t.settings.ytClientSecret}>
-              <MonoInput isFl={isFl} value={s.ytClientSecret} onCommit={(v) => patch({ ytClientSecret: v })} secret />
+              <MonoInput value={s.ytClientSecret} onCommit={(v) => patch({ ytClientSecret: v })} secret />
             </Field>
           </>
         )}
 
         <Field label={t.settings.ytFfmpegPath}>
-          <MonoInput isFl={isFl} value={s.ffmpegPath} onCommit={(v) => patch({ ffmpegPath: v })} placeholder="C:\ffmpeg\bin\ffmpeg.exe" />
-          <span style={{ fontSize: isFl ? "11.5px" : "var(--fs-sm)", fontFamily: "var(--font-mono)", color: ffmpegInfo?.found ? "var(--positive)" : "var(--rec, #ff453a)" }}>
+          <MonoInput value={s.ffmpegPath} onCommit={(v) => patch({ ffmpegPath: v })} placeholder="C:\ffmpeg\bin\ffmpeg.exe" />
+          <span style={{ fontSize: "var(--fs-sm)", fontFamily: "var(--font-mono)", color: ffmpegInfo?.found ? "var(--positive)" : "var(--danger)" }}>
             {ffmpegInfo == null ? "…" : ffmpegInfo.found ? `${t.settings.ytFfmpegOk} ${ffmpegInfo.path}` : t.settings.ytFfmpegMissing}
           </span>
           {ffmpegInfo != null && !ffmpegInfo.found && (
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
-              <span style={{ fontSize: isFl ? "11.5px" : "var(--fs-sm)", color: isFl ? "var(--ink-dim)" : "var(--text-faint)", lineHeight: 1.5, maxWidth: 560 }}>
+              <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-faint)", lineHeight: 1.5, maxWidth: 560 }}>
                 {t.settings.ytFfmpegWhy}
               </span>
               {ffJob && (ffJob.status === "running" || ffJob.status === "queued") ? (
-                <span style={{ fontSize: isFl ? "11.5px" : "var(--fs-sm)", fontFamily: "var(--font-mono)", color: isFl ? "var(--lcd-amber, #ffb55b)" : "var(--accent)" }}>
+                <span style={{ fontSize: "var(--fs-sm)", fontFamily: "var(--font-mono)", color: "var(--accent)" }}>
                   {ffJob.stage === "extract" ? t.settings.ytFfmpegExtracting : `${t.settings.ytFfmpegDownloading} ${Math.round((ffJob.progress || 0) * 100)}%`}
                 </span>
               ) : (
@@ -388,7 +339,7 @@ export function SettingsPage() {
                     {t.settings.ytFfmpegDownload}
                   </Button>
                   {ffJob?.status === "failed" && (
-                    <span style={{ fontSize: "var(--fs-sm)", color: "var(--rec, #ff453a)" }}>
+                    <span style={{ fontSize: "var(--fs-sm)", color: "var(--danger)" }}>
                       {t.settings.ytFfmpegFailed}{ffJob.error ? `: ${ffJob.error}` : ""}
                     </span>
                   )}
@@ -404,31 +355,30 @@ export function SettingsPage() {
               className="mono"
               style={{
                 flex: 1,
-                height: isFl ? 36 : "var(--input-height)",
+                height: "var(--input-height)",
                 display: "flex", alignItems: "center",
                 padding: "0 14px",
-                background: isFl ? "var(--groove)" : "var(--surface-input)",
-                border: `1px solid ${isFl ? "var(--line-work)" : "var(--border-medium)"}`,
-                borderRadius: isFl ? 7 : "var(--radius-input)",
-                boxShadow: isFl ? "inset 0 2px 4px rgba(0,0,0,.35)" : undefined,
+                background: "var(--surface-input)",
+                border: "1px solid var(--border-medium)",
+                borderRadius: "var(--radius-input)",
                 fontSize: 11,
-                color: s.ytDefaultImage ? (isFl ? "var(--ink-on-work)" : "var(--text-body)") : (isFl ? "var(--ink-dim)" : "var(--text-faint)"),
+                color: s.ytDefaultImage ? "var(--text-body)" : "var(--text-faint)",
                 whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
               }}
             >
               {s.ytDefaultImage || t.common.none}
             </div>
-            <ChromeBtn isFl={isFl} onClick={() => pickImageFile().then((p) => { if (p) patch({ ytDefaultImage: p }); })}>
+            <Button variant="secondary" onClick={() => pickImageFile().then((p) => { if (p) patch({ ytDefaultImage: p }); })}>
               <Icons.Folder width={13} height={13} />
               {t.settings.ytPickImage}
-            </ChromeBtn>
+            </Button>
           </div>
         </Field>
 
-        <p style={{ margin: 0, fontSize: isFl ? "11.5px" : "var(--fs-sm)", lineHeight: 1.55, color: isFl ? "var(--ink-dim)" : "var(--text-faint)", maxWidth: 640 }}>
+        <p style={{ margin: 0, fontSize: "var(--fs-sm)", lineHeight: 1.55, color: "var(--text-faint)", maxWidth: 640 }}>
           {t.settings.ytQuotaHint}
         </p>
-      </Section>
+      </CardSection>
     </div>
   );
 }
@@ -436,10 +386,9 @@ export function SettingsPage() {
 // ── Local controls (both themes) ───────────────────────────────────────────────
 
 // MonoInput — текстовое поле для ключей/путей: коммит по blur или Enter.
-function MonoInput({ value, onCommit, isFl, secret, placeholder }: {
+function MonoInput({ value, onCommit, secret, placeholder }: {
   value: string;
   onCommit: (v: string) => void;
-  isFl: boolean;
   secret?: boolean;
   placeholder?: string;
 }) {
@@ -456,33 +405,17 @@ function MonoInput({ value, onCommit, isFl, secret, placeholder }: {
       spellCheck={false}
       style={{
         width: "100%", maxWidth: 460,
-        height: isFl ? 36 : "var(--input-height)",
+        height: "var(--input-height)",
         padding: "0 14px",
-        background: isFl ? "var(--groove)" : "var(--surface-input)",
-        border: `1px solid ${isFl ? "var(--line-work)" : "var(--border-medium)"}`,
-        borderRadius: isFl ? 7 : "var(--radius-input)",
-        boxShadow: isFl ? "inset 0 2px 4px rgba(0,0,0,.35)" : undefined,
-        color: isFl ? "var(--ink-on-work)" : "var(--text-body)",
+        background: "var(--surface-input)",
+        border: "1px solid var(--border-medium)",
+        borderRadius: "var(--radius-input)",
+        color: "var(--text-body)",
         fontFamily: "var(--font-mono)",
         fontSize: 12,
         outline: "none",
       }}
     />
-  );
-}
-
-// ChromeBtn — кнопка в стиле страницы: металл в FL-теме, secondary в остальных.
-function ChromeBtn({ onClick, children, isFl }: { onClick: () => void; children: React.ReactNode; isFl: boolean }) {
-  if (!isFl) {
-    return <Button variant="secondary" onClick={onClick}>{children}</Button>;
-  }
-  return (
-    <button
-      onClick={onClick}
-      style={{ height: 34, padding: "0 14px", display: "flex", alignItems: "center", gap: 7, background: "linear-gradient(var(--btn-hi),var(--btn))", border: "1px solid var(--chrome-lo)", borderRadius: 7, color: "var(--ink)", font: "600 12.5px var(--font-sans)", cursor: "pointer", boxShadow: "inset 0 1px 0 rgba(255,255,255,.5),0 1px 2px rgba(0,0,0,.25)" }}
-    >
-      {children}
-    </button>
   );
 }
 
@@ -497,216 +430,11 @@ function CardSection({ label, children }: { label: string; children: React.React
   );
 }
 
-function FlSection({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div style={{
-      position: "relative",
-      background: "linear-gradient(var(--panel-hi), var(--panel))",
-      border: "1px solid var(--panel-lo)",
-      borderRadius: 10,
-      padding: "16px 20px 18px",
-      boxShadow: "inset 0 1px 0 rgba(255,255,255,.5), 0 2px 6px rgba(0,0,0,.3)",
-    }}>
-      {/* Corner screws */}
-      <Screw style={{ top: 7, left: 7 }} />
-      <Screw style={{ top: 7, right: 7 }} />
-      <Screw style={{ bottom: 7, left: 7 }} />
-      <Screw style={{ bottom: 7, right: 7 }} />
-
-      <div style={{ font: "700 10px var(--font-sans)", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--ink-dim)", marginBottom: 14 }}>
-        {label}
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function Screw({ style }: { style: React.CSSProperties }) {
-  return (
-    <div style={{
-      position: "absolute", width: 10, height: 10, borderRadius: "50%",
-      background: "radial-gradient(circle at 40% 35%, var(--panel-hi), var(--panel-lo))",
-      border: "1px solid rgba(0,0,0,.2)",
-      boxShadow: "inset 0 1px 0 rgba(255,255,255,.3)",
-      ...style,
-    }}>
-      <div style={{ position: "absolute", inset: "1px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ width: 5, height: 1, background: "rgba(0,0,0,.35)", borderRadius: 1 }} />
-      </div>
-    </div>
-  );
-}
-
-// ── FL fader (drag) ────────────────────────────────────────────────────────────
-
-function FlFader({ value, min, max, step, onChange }: { value: number; min: number; max: number; step: number; onChange: (v: number) => void }) {
-  const trackRef = React.useRef<HTMLDivElement>(null);
-  const startRef = React.useRef<{ x: number; v: number } | null>(null);
-
-  const pct = ((value - min) / (max - min)) * 100;
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault();
-    startRef.current = { x: e.clientX, v: value };
-    const onMove = (me: MouseEvent) => {
-      if (!startRef.current || !trackRef.current) return;
-      const rect = trackRef.current.getBoundingClientRect();
-      const ratio = Math.max(0, Math.min(1, (me.clientX - rect.left) / rect.width));
-      const raw = min + ratio * (max - min);
-      onChange(Math.round(raw / step) * step);
-    };
-    const onUp = () => {
-      startRef.current = null;
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-  };
-
-  const handleTrackClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!trackRef.current) return;
-    const rect = trackRef.current.getBoundingClientRect();
-    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    const raw = min + ratio * (max - min);
-    onChange(Math.round(raw / step) * step);
-  };
-
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-      <div
-        ref={trackRef}
-        onClick={handleTrackClick}
-        style={{ flex: 1, height: 14, borderRadius: 3, background: "var(--groove)", border: "1px solid var(--panel-lo)", boxShadow: "inset 0 1px 3px rgba(0,0,0,.5)", position: "relative", cursor: "pointer" }}
-      >
-        <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${pct}%`, background: "var(--accent)", borderRadius: 3 }} />
-        <div
-          onMouseDown={handleMouseDown}
-          style={{
-            position: "absolute", top: "50%", left: `${pct}%`,
-            transform: "translate(-50%, -50%)",
-            width: 14, height: 22, borderRadius: 3, cursor: "ew-resize",
-            background: "linear-gradient(var(--btn-hi), var(--btn))",
-            border: "1px solid var(--chrome-lo)",
-            boxShadow: "inset 0 1px 0 rgba(255,255,255,.5), 0 2px 4px rgba(0,0,0,.35)",
-          }}
-        />
-      </div>
-      <div style={{ width: 34, textAlign: "right", font: "400 13px var(--font-mono)", color: "var(--lcd-amber)", textShadow: "0 0 6px rgba(255,181,91,.4)" }}>{value}</div>
-    </div>
-  );
-}
-
-// ── FL metal checkbox ─────────────────────────────────────────────────────────
-
-function FlMetaCheckbox({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
-  return (
-    <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
-      <span
-        onClick={() => onChange(!checked)}
-        style={{
-          width: 20, height: 20, borderRadius: 5, flexShrink: 0,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          background: checked ? "linear-gradient(var(--accent), var(--accent-deep, #e8651e))" : "linear-gradient(var(--panel-hi), var(--panel))",
-          border: "1px solid var(--panel-lo)",
-          boxShadow: checked
-            ? "inset 0 1px 0 rgba(255,255,255,.3), 0 0 8px rgba(255,138,60,.4)"
-            : "inset 0 1px 2px rgba(0,0,0,.3), inset 0 -1px 0 rgba(255,255,255,.15)",
-        }}
-      >
-        {checked && (
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M4 12l5 5L20 6"/>
-          </svg>
-        )}
-      </span>
-      <span style={{ font: "500 13px var(--font-sans)", color: "var(--ink)" }}>{label}</span>
-    </label>
-  );
-}
-
-// ── FL select ─────────────────────────────────────────────────────────────────
-
-function FlSelect({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: { value: string; label: string }[] }) {
-  return (
-    <div style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        style={{
-          height: 36, padding: "0 32px 0 14px",
-          background: "linear-gradient(var(--btn-hi), var(--btn))",
-          color: "var(--ink)",
-          border: "1px solid var(--chrome-lo)",
-          borderRadius: 7,
-          fontFamily: "var(--font-sans)", fontSize: "13px", fontWeight: 600,
-          cursor: "pointer", appearance: "none", outline: "none",
-          boxShadow: "inset 0 1px 0 rgba(255,255,255,.5), 0 1px 2px rgba(0,0,0,.25)",
-        }}
-      >
-        {options.map((o) => <option key={o.value} value={o.value} style={{ background: "var(--panel)", color: "var(--ink)" }}>{o.label}</option>)}
-      </select>
-      <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" style={{ position: "absolute", right: 10, pointerEvents: "none", color: "var(--ink-dim)" }}>
-        <path d="M7 10l5 5 5-5z"/>
-      </svg>
-    </div>
-  );
-}
-
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-muted)" }}>{label}</span>
       {children}
-    </div>
-  );
-}
-
-function ThemePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const t = useT();
-  const options = [
-    { value: "warm-dark", label: t.settings.themeWarmDark },
-    { value: "light",     label: t.settings.themeLight },
-    { value: "dark",      label: t.settings.themeDark },
-    { value: "fl",        label: "FL Studio" },
-  ];
-  return (
-    <div
-      style={{
-        display: "inline-flex",
-        background: "var(--surface-well)",
-        borderRadius: "var(--radius-md)",
-        padding: 3,
-        gap: 2,
-        border: "1px solid var(--border-soft)",
-      }}
-    >
-      {options.map((o) => {
-        const active = value === o.value;
-        return (
-          <button
-            key={o.value}
-            onClick={() => onChange(o.value)}
-            style={{
-              padding: "8px 18px",
-              borderRadius: "calc(var(--radius-md) - 1px)",
-              border: "none",
-              cursor: "pointer",
-              fontSize: "var(--fs-sm)",
-              fontFamily: "var(--font-sans)",
-              fontWeight: active ? 600 : 400,
-              background: active ? "var(--surface-card)" : "transparent",
-              color: active ? "var(--text-strong)" : "var(--text-muted)",
-              boxShadow: active ? "var(--shadow-sm)" : "none",
-              transition: "all var(--dur-fast) var(--ease-out)",
-            }}
-          >
-            {o.label}
-          </button>
-        );
-      })}
     </div>
   );
 }
