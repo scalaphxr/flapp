@@ -610,7 +610,6 @@ export function SamplesPage() {
                       sortBy={sortBy}
                       sortOrder={sortOrder}
                       onSort={handleSort}
-                      isFl
                     />
                     {/* FL table footer */}
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 14px", height: 42, background: "linear-gradient(var(--work-2),var(--work-3))", borderTop: "1px solid var(--line-work)", flexShrink: 0 }}>

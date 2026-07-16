@@ -23,7 +23,6 @@ interface SoundTableProps {
   sortBy?: string | null;
   sortOrder?: "asc" | "desc";
   onSort?: (col: string) => void;
-  isFl?: boolean;
 }
 
 const originIcon: Record<string, keyof typeof Icons> = {
@@ -51,14 +50,11 @@ export function SoundTable({
   sortBy,
   sortOrder,
   onSort,
-  isFl = false,
 }: SoundTableProps) {
   const t = useT();
   // Явная сетка: фикс-чекбокс + фикс-плей + гибкий файл + фикс-тип + фикс-источник + фикс-размер.
   // Одинакова для шапки и строк — гарантирует выравнивание колонок.
-  const cols = isFl
-    ? (selectable ? "30px 34px minmax(0,1fr) 132px 150px 90px" : "34px minmax(0,1fr) 132px 150px 90px")
-    : (selectable ? "40px 44px minmax(0,1fr) 140px 162px 90px" : "44px minmax(0,1fr) 140px 162px 90px");
+  const cols = selectable ? "40px 44px minmax(0,1fr) 140px 162px 90px" : "44px minmax(0,1fr) 140px 162px 90px";
 
   function SortHeader({ col, children }: { col: string; children: React.ReactNode }) {
     if (!onSort) return <span>{children}</span>;
@@ -94,27 +90,17 @@ export function SoundTable({
   // gap совпадает с gap строк — шапка выравнивается по данным пиксель в пиксель
   const COL_GAP = 10;
 
-  const hdrStyle: React.CSSProperties = isFl
-    ? {
-        display: "grid", gridTemplateColumns: cols, alignItems: "center",
-        gap: COL_GAP, padding: "0 12px", height: 36,
-        background: "linear-gradient(var(--work-3), var(--work-2))",
-        borderBottom: "1px solid var(--line-work)",
-        font: "700 10px var(--font-sans)" as any,
-        letterSpacing: "1px", color: "var(--ink-on-work-dim)",
-        textTransform: "uppercase" as any, flexShrink: 0,
-      }
-    : {
-        display: "grid", gridTemplateColumns: cols, alignItems: "center",
-        gap: COL_GAP, padding: "0 14px", height: 36,
-        fontSize: "var(--fs-label)", fontWeight: "var(--fw-semibold)" as any,
-        letterSpacing: "var(--ls-label)", textTransform: "uppercase" as any,
-        color: "var(--text-faint)", flexShrink: 0,
-      };
+  const hdrStyle: React.CSSProperties = {
+    display: "grid", gridTemplateColumns: cols, alignItems: "center",
+    gap: COL_GAP, padding: "0 14px", height: 36,
+    fontSize: "var(--fs-label)", fontWeight: "var(--fw-semibold)" as any,
+    letterSpacing: "var(--ls-label)", textTransform: "uppercase" as any,
+    color: "var(--text-faint)", flexShrink: 0,
+  };
 
   // ── Виртуализация ─────────────────────────────────────────────────────────
-  // Высота строки фиксирована: 44px без волны, 60/70px с волной.
-  const ROW_H = showWaveform ? (isFl ? 60 : 70) : 44;
+  // Высота строки фиксирована: 44px без волны, 70px с волной.
+  const ROW_H = showWaveform ? 70 : 44;
   const BUFFER = 5; // строк вне видимой зоны сверху и снизу
 
   const scrollRef = React.useRef<HTMLDivElement>(null);
@@ -147,26 +133,20 @@ export function SoundTable({
   );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1,
-      ...(isFl ? {
-        background: "var(--work-2)", border: "1px solid var(--line-work)",
-        borderRadius: 9, overflow: "hidden",
-        boxShadow: "inset 0 0 0 1px rgba(0,0,0,.2), 0 2px 6px rgba(0,0,0,.25)",
-      } : {}),
-    }}>
+    <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
       <div style={hdrStyle}>
         {selectable ? <span /> : null}
         <span />
         <SortHeader col="name">{t.harvest.colFile}</SortHeader>
-        <span>{isFl ? "SOUND TYPE" : t.harvest.colType}</span>
-        <span>{isFl ? "SOURCE" : t.harvest.colSource}</span>
-        <span style={{ textAlign: "right" }}>{isFl ? "SIZE" : t.harvest.colSize}</span>
+        <span>{t.harvest.colType}</span>
+        <span>{t.harvest.colSource}</span>
+        <span style={{ textAlign: "right" }}>{t.harvest.colSize}</span>
       </div>
 
       <div
         ref={scrollRef}
         onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
-        style={{ overflowY: "auto", flex: 1, minHeight: 0, paddingRight: isFl ? 0 : 2 }}
+        style={{ overflowY: "auto", flex: 1, minHeight: 0, paddingRight: 2 }}
       >
         {topPad > 0 && <div style={{ height: topPad }} aria-hidden="true" />}
         {samples.slice(visStart, visEnd + 1).map((s, i) => (
@@ -184,13 +164,12 @@ export function SoundTable({
             onCategoryChange={onCategoryChange ? (cat) => onCategoryChange(s.id, cat) : undefined}
             active={activeId === s.id}
             showWaveform={showWaveform}
-            isFl={isFl}
             dragPaths={selectedPaths && selected?.has(s.id) ? selectedPaths : [s.path]}
           />
         ))}
         {botPad > 0 && <div style={{ height: botPad }} aria-hidden="true" />}
         {samples.length === 0 ? (
-          <div style={{ padding: "40px 0", textAlign: "center", color: isFl ? "var(--ink-on-work-dim)" : "var(--text-faint)", fontSize: "var(--fs-sm)", fontFamily: isFl ? "var(--font-sans)" : undefined }}>
+          <div style={{ padding: "40px 0", textAlign: "center", color: "var(--text-faint)", fontSize: "var(--fs-sm)" }}>
             {emptyText ?? t.common.nothingFound}
           </div>
         ) : null}
@@ -212,7 +191,6 @@ function SoundRow({
   onCategoryChange,
   active,
   showWaveform,
-  isFl,
   dragPaths,
 }: {
   sample: Sample;
@@ -227,7 +205,6 @@ function SoundRow({
   onCategoryChange?: (cat: string) => void;
   active?: boolean;
   showWaveform: boolean;
-  isFl: boolean;
   dragPaths: string[];
 }) {
   const t = useT();
@@ -239,17 +216,7 @@ function SoundRow({
   // COL_GAP дублируем здесь — rows и header должны иметь одинаковый gap
   const COL_GAP = 10;
 
-  const rowBg = isFl
-    ? checked
-      ? "rgba(255,138,60,.13)"
-      : playing
-      ? "rgba(255,138,60,.06)"
-      : hover
-      ? "rgba(255,255,255,.035)"
-      : zebra
-      ? "transparent"
-      : "transparent"
-    : playing
+  const rowBg = playing
     ? "var(--accent-soft)"
     : active
     ? "var(--surface-active)"
@@ -261,12 +228,10 @@ function SoundRow({
     ? "var(--row-zebra)"
     : "transparent";
 
-  const rowBoxShadow = isFl && (checked || active) ? "inset 3px 0 0 var(--accent)" : undefined;
-  const rowBorderBottom = isFl ? "1px solid var(--line-work)" : undefined;
   // Высота строки фиксирована — виртуализация опирается на константу ROW_H.
   // Без явной высоты контент мог бы растягивать строку и ломать расчёт паддингов.
   const rowHeight = showWaveform ? undefined : 44;
-  const rowMinHeight = showWaveform ? (isFl ? 60 : 70) : undefined;
+  const rowMinHeight = showWaveform ? 70 : undefined;
 
   return (
     <div
@@ -281,46 +246,37 @@ function SoundRow({
         gap: COL_GAP,
         height: rowHeight,
         minHeight: rowMinHeight,
-        padding: isFl ? (showWaveform ? "6px 12px" : "0 12px") : (showWaveform ? "6px 14px" : "0 14px"),
-        borderRadius: isFl ? 0 : "var(--radius-row)",
-        borderBottom: rowBorderBottom,
+        padding: showWaveform ? "6px 14px" : "0 14px",
+        borderRadius: "var(--radius-row)",
         cursor: onRowClick ? "pointer" : "default",
         background: rowBg,
-        boxShadow: rowBoxShadow,
-        transition: isFl ? undefined : "background var(--dur-fast) var(--ease-out)",
+        transition: "background var(--dur-fast) var(--ease-out)",
       }}
     >
       {selectable ? (
         <span onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-          {isFl
-            ? <FlCheckbox checked={checked} onChange={onToggle} />
-            : <Checkbox checked={checked} onChange={onToggle} />
-          }
+          <Checkbox checked={checked} onChange={onToggle} />
         </span>
       ) : null}
 
-      {isFl
-        ? <FlPlayBtn playing={playing} onClick={(e) => { e.stopPropagation(); onPlay(); }} />
-        : <PlayButton playing={playing} size={32} onClick={(e) => { e.stopPropagation(); onPlay(); }} />
-      }
+      <PlayButton playing={playing} size={32} onClick={(e) => { e.stopPropagation(); onPlay(); }} />
 
       {/* Ячейка «файл + волна»: minWidth:0 предотвращает переполнение 1fr */}
-      <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: isFl ? 5 : 4 }}>
+      <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
         <span style={{
-          fontSize: isFl ? "13.5px" : "var(--fs-body)",
-          color: isFl ? "var(--ink-on-work)" : "var(--text-body)",
-          fontWeight: isFl ? 600 : ("var(--fw-medium)" as any),
-          fontFamily: isFl ? "var(--font-sans)" : undefined,
+          fontSize: "var(--fs-body)",
+          color: "var(--text-body)",
+          fontWeight: "var(--fw-medium)" as any,
           whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
         }}>
           {sample.name}
         </span>
         {showWaveform ? (
-          <WaveformCanvas id={sample.id} playing={playing} isFl={isFl} durationSec={sample.features?.durationSeconds} />
+          <WaveformCanvas id={sample.id} playing={playing} durationSec={sample.features?.durationSeconds} />
         ) : (
           <span style={{
             fontSize: "11px",
-            color: isFl ? "var(--ink-on-work-dim)" : "var(--text-faint)",
+            color: "var(--text-faint)",
             fontFamily: "var(--font-mono)",
             whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
           }}>
@@ -341,82 +297,24 @@ function SoundRow({
         ) : (
           <CategoryTag category={sample.category} />
         )}
-        {sample.auto && !isFl ? (
+        {sample.auto ? (
           <span title={t.harvest.autoTag} style={{ display: "inline-flex", color: "var(--text-faint)" }}>
             <Icons.Info width={13} height={13} />
           </span>
         ) : null}
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 7, color: isFl ? "var(--ink-on-work-dim)" : "var(--text-muted)", fontSize: "var(--fs-sm)", fontFamily: isFl ? "var(--font-sans)" : undefined }}>
-        <span style={{ display: "inline-flex", color: isFl ? "var(--ink-on-work-dim)" : "var(--text-faint)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 7, color: "var(--text-muted)", fontSize: "var(--fs-sm)" }}>
+        <span style={{ display: "inline-flex", color: "var(--text-faint)" }}>
           <OriginIcon width={13} height={13} />
         </span>
         {originLabel}
       </div>
 
-      <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: isFl ? "12px" : "var(--fs-sm)", color: isFl ? "var(--ink-on-work-dim)" : "var(--text-muted)" }}>
+      <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: "var(--fs-sm)", color: "var(--text-muted)" }}>
         {formatBytes(sample.size)}
       </div>
     </div>
-  );
-}
-
-// ── FL metal play button ──────────────────────────────────────────────────────
-
-function FlPlayBtn({ playing, onClick }: { playing: boolean; onClick: (e: React.MouseEvent) => void }) {
-  return (
-    <div
-      onClick={onClick}
-      style={{
-        width: 28, height: 28, borderRadius: 5,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        cursor: "pointer", flexShrink: 0,
-        border: "1px solid var(--chrome-lo)",
-        background: playing
-          ? "linear-gradient(var(--accent), var(--accent-deep, #e8651e))"
-          : "linear-gradient(var(--btn-hi), var(--btn))",
-        color: playing ? "#fff" : "var(--ink)",
-        boxShadow: playing
-          ? "inset 0 1px 0 rgba(255,255,255,.4), 0 0 8px rgba(255,138,60,.45)"
-          : "inset 0 1px 0 rgba(255,255,255,.5), 0 1px 2px rgba(0,0,0,.25)",
-      }}
-    >
-      <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-        {playing
-          ? <><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></>
-          : <path d="M8 5v14l11-7z"/>
-        }
-      </svg>
-    </div>
-  );
-}
-
-// ── FL metal checkbox ─────────────────────────────────────────────────────────
-
-function FlCheckbox({ checked, onChange }: { checked: boolean; onChange: () => void }) {
-  return (
-    <span
-      onClick={(e) => { e.stopPropagation(); onChange(); }}
-      style={{
-        width: 18, height: 18, borderRadius: 4, cursor: "pointer",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        flexShrink: 0,
-        border: "1px solid var(--chrome-lo)",
-        background: checked
-          ? "linear-gradient(var(--accent), var(--accent-deep, #e8651e))"
-          : "linear-gradient(var(--panel-hi), var(--panel))",
-        boxShadow: checked
-          ? "inset 0 1px 0 rgba(255,255,255,.4), 0 0 6px rgba(255,138,60,.5)"
-          : "inset 0 1px 2px rgba(0,0,0,.25)",
-      }}
-    >
-      {checked && (
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M4 12l5 5L20 6"/>
-        </svg>
-      )}
-    </span>
   );
 }
 
@@ -500,8 +398,8 @@ function buildOffscreens(
 // RAF-цикл запускается ТОЛЬКО для воспроизводимой строки.
 // Статичная форма волны кешируется в двух offscreen-канвасах (dim + accent)
 // и блитается за O(1) вместо перебора 1500 баров на каждый кадр.
-function WaveformCanvas({ id, playing, isFl, durationSec }: {
-  id: number; playing: boolean; isFl: boolean; durationSec?: number
+function WaveformCanvas({ id, playing, durationSec }: {
+  id: number; playing: boolean; durationSec?: number
 }) {
   const canvasRef   = React.useRef<HTMLCanvasElement>(null);
   // peaksRef: null = ещё не загружены, [] = формат без PCM (m4a/aac).
@@ -537,15 +435,9 @@ function WaveformCanvas({ id, playing, isFl, durationSec }: {
     if (!ctx) return;
 
     const style  = getComputedStyle(canvas);
-    const accent = isFl
-      ? (style.getPropertyValue("--accent").trim() || "#ff8a3c")
-      : (style.getPropertyValue("--accent").trim() || "#E8845C");
-    const dim    = isFl
-      ? (style.getPropertyValue("--ink-on-work-dim").trim() || "#868c95")
-      : (style.getPropertyValue("--surface-3").trim() || "#2E261E");
-    const head   = isFl
-      ? (style.getPropertyValue("--accent").trim() || "#ff8a3c")
-      : (style.getPropertyValue("--text-strong").trim() || "#F4ECE3");
+    const accent = style.getPropertyValue("--accent").trim() || "#E8845C";
+    const dim    = style.getPropertyValue("--surface-3").trim() || "#2E261E";
+    const head   = style.getPropertyValue("--text-strong").trim() || "#F4ECE3";
 
     ctx.clearRect(0, 0, pw, ph);
     const peaks = peaksRef.current;
@@ -665,7 +557,7 @@ function WaveformCanvas({ id, playing, isFl, durationSec }: {
       onClick={handleClick}
       style={{
         width: "100%",
-        height: isFl ? 22 : 40,
+        height: 40,
         display: "block",
         borderRadius: 3,
         cursor: playing ? "pointer" : "default",
