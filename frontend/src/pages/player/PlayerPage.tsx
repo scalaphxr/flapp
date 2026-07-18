@@ -11,7 +11,7 @@ import { formatBytes, formatDuration } from "@/shared/lib/format";
 import { fileName, onFileDrop, pickFolder, pickFonts, isTauri } from "@/shared/lib/tauri";
 import { fileDragProps } from "@/shared/lib/dragOut";
 import { parseAuthors, joinAuthors } from "@/shared/lib/authors";
-import { buildKeywords, buildHashtags, mergeRoster } from "@/shared/lib/ytKeywords";
+import { buildKeywords, buildHashtags, mergeRoster, parseTypeArtists } from "@/shared/lib/ytKeywords";
 import { useSettingsStore } from "@/shared/model/settings";
 import { useJobsStore } from "@/shared/model/jobs";
 import { api } from "@/shared/api/client";
@@ -1178,8 +1178,9 @@ function renderYtVars(tpl: string, b: YtBeat, nick: string, authors: string[], r
   const stem = b.name.replace(/\.[^.]+$/, "");
   const parsed = beatTitleFromStem(stem, b.bpm);
   const bpm = b.bpm ? Math.round(b.bpm) : parsed.bpm;
-  const nlc = nick.trim().toLowerCase();
-  const typeArtists = authors.filter((a) => a.trim().toLowerCase() !== nlc);
+  // Ключевики/хэштеги — по тайпу, в котором выкладывается бит (напр. «NBA
+  // YoungBoy»), а не по авторам из имени файла: именно тайп ищут на YouTube.
+  const typeArtists = parseTypeArtists(b.typeName);
   const year = new Date().getFullYear();
   return tpl
     .split("{name}").join(stripNick(parsed.title, nick))
@@ -1551,6 +1552,16 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
     }
   }
 
+  // Теги подбираются автоматически при открытии диалога — пользователю не нужно
+  // жать «Auto-pick». Один раз за сессию, как только известен тайп.
+  const didAutoTag = React.useRef(false);
+  React.useEffect(() => {
+    if (didAutoTag.current || !artists.length) return;
+    didAutoTag.current = true;
+    void autoTags();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [artists]);
+
   async function pinSearch(q: string) {
     const query = q.trim();
     if (!query) {
@@ -1675,11 +1686,9 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
   // чтобы видеть стену тегов до публикации. Тип-артисты — без своего ника.
   const kwPreview = React.useMemo(() => {
     if (!focusBeat) return { keywords: "", hashtags: "" };
-    const nlc = nick.trim().toLowerCase();
-    const ta = beatAuthors(focusBeat, nick, aliases, extras[focusBeat.path] ?? [])
-      .filter((a) => a.trim().toLowerCase() !== nlc);
+    const ta = parseTypeArtists(focusBeat.typeName);
     return { keywords: buildKeywords(ta, roster, new Date().getFullYear()), hashtags: buildHashtags(ta) };
-  }, [focusBeat, nick, aliases, extras, roster]);
+  }, [focusBeat, roster]);
   // Чипсы = распознанные соавторы (без своего ника) + ручные добавления. У
   // каждого чипа source = исходный токен из имени (для записи правки в алиасы)
   // или null для добавленного вручную.
@@ -2066,13 +2075,10 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
     // Авторост ростера: артисты успешно поставленных в очередь битов пополняют
     // пул для будущих видео. Артисты текущей пачки и так во фронт-слайсе.
     if (rosterAutoGrow) {
-      const nlc = nick.trim().toLowerCase();
       let grown = roster;
       for (const b of beats) {
         if (!map[b.path]) continue; // не ушёл в загрузку
-        const ta = beatAuthors(b, nick, aliases, extras[b.path] ?? [])
-          .filter((a) => a.trim().toLowerCase() !== nlc);
-        grown = mergeRoster(grown, ta);
+        grown = mergeRoster(grown, parseTypeArtists(b.typeName));
       }
       if (grown !== roster) {
         setRoster(grown);

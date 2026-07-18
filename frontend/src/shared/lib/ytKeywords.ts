@@ -24,6 +24,23 @@ export function parseRoster(raw: string): string[] {
   return out;
 }
 
+/** Разбивает тайп (в котором выкладывается бит, напр. «Bankroll Fresh x MexikoDro
+ *  x Baby Mel») на отдельных артистов. Разделители: « x », «×», запятая, «&».
+ *  Именно тайп, а не авторы из имени файла, определяет ключевики/хэштеги. */
+export function parseTypeArtists(type: string): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const part of type.split(/\s*(?:×|,|&)\s*|\s+x\s+/i)) {
+    const v = part.trim();
+    if (!v) continue;
+    const k = v.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(v);
+  }
+  return out;
+}
+
 /** Ключевые фразы бита: «{artist} type beat», «free …», «… {год}», голое имя. */
 function beatPhrases(artists: string[], year: number): string[] {
   const out: string[] = [];

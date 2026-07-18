@@ -1,10 +1,17 @@
-import { buildHashtags, buildKeywords, mergeRoster, parseRoster } from "./ytKeywords.ts";
+import { buildHashtags, buildKeywords, mergeRoster, parseRoster, parseTypeArtists } from "./ytKeywords.ts";
 
 function eq(got: unknown, want: unknown, msg: string): void {
   const G = JSON.stringify(got), W = JSON.stringify(want);
   if (G !== W) throw new Error(`FAIL ${msg}\n  got:  ${G}\n  want: ${W}`);
   console.log(`ok - ${msg}`);
 }
+
+// parseTypeArtists: split the type on " x ", ×, comma, & into distinct artists
+eq(parseTypeArtists("NBA YoungBoy"), ["NBA YoungBoy"], "parseTypeArtists single");
+eq(parseTypeArtists("Bankroll Fresh x MexikoDro x Baby Mel"),
+   ["Bankroll Fresh", "MexikoDro", "Baby Mel"], "parseTypeArtists multi x");
+eq(parseTypeArtists("Drake, Future & Metro"), ["Drake", "Future", "Metro"], "parseTypeArtists comma/amp");
+eq(parseTypeArtists("Lil Xan"), ["Lil Xan"], "parseTypeArtists keeps attached x");
 
 // parseRoster: split on comma/newline, trim, drop empty, case-insensitive dedup, keep order
 eq(parseRoster("jeezy, Chief Keef\n jeezy ,,\nbuy rap beats"),
