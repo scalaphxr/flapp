@@ -8,9 +8,10 @@ import React from "react";
 import { Icons, Input, Button } from "@/shared/ui";
 import { useT } from "@/shared/i18n";
 import { formatBytes, formatDuration } from "@/shared/lib/format";
-import { fileName, onFileDrop, pickFolder, isTauri } from "@/shared/lib/tauri";
+import { fileName, onFileDrop, pickFolder, pickFonts, isTauri } from "@/shared/lib/tauri";
 import { fileDragProps } from "@/shared/lib/dragOut";
 import { parseAuthors, joinAuthors } from "@/shared/lib/authors";
+import { buildKeywords, buildHashtags, mergeRoster } from "@/shared/lib/ytKeywords";
 import { useSettingsStore } from "@/shared/model/settings";
 import { useJobsStore } from "@/shared/model/jobs";
 import { api } from "@/shared/api/client";
@@ -1049,11 +1050,13 @@ function TypeChip({
   deleteTitle?: string;
   chipRef?: (el: HTMLElement | null) => void;
 }) {
-  const [hover, setHover] = React.useState(false);
+  // Карандаш/крестик скрыты; показываются только по правому клику (ПКМ) на чип.
+  const [revealed, setRevealed] = React.useState(false);
+  const showBtns = revealed && !!(onRename || onDelete);
   const style: React.CSSProperties = isFl
     ? {
         display: "inline-flex", alignItems: "center", gap: 6,
-        height: 28, padding: onDelete ? "0 5px 0 11px" : "0 11px",
+        height: 28, padding: showBtns ? "0 5px 0 11px" : "0 11px",
         borderRadius: 6, cursor: "pointer", userSelect: "none", flexShrink: 0,
         font: "600 11.5px var(--font-sans)",
         background: active
@@ -1069,7 +1072,7 @@ function TypeChip({
       }
     : {
         display: "inline-flex", alignItems: "center", gap: 6,
-        height: 26, padding: onDelete ? "0 4px 0 11px" : "0 11px",
+        height: 26, padding: showBtns ? "0 4px 0 11px" : "0 11px",
         borderRadius: 13, cursor: "pointer", userSelect: "none", flexShrink: 0,
         fontSize: "var(--fs-sm)", fontWeight: "var(--fw-semibold)" as any,
         background: active ? "var(--accent-soft)" : "transparent",
@@ -1083,8 +1086,8 @@ function TypeChip({
       ref={chipRef}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
+      onContextMenu={(e) => { if (onRename || onDelete) { e.preventDefault(); setRevealed(true); } }}
+      onMouseLeave={() => setRevealed(false)}
       title={title}
       style={style}
     >
@@ -1092,30 +1095,26 @@ function TypeChip({
       {count != null && (
         <span style={{ opacity: 0.6, fontSize: 10, fontFamily: "var(--font-mono)" }}>{count}</span>
       )}
-      {onRename && (
+      {revealed && onRename && (
         <span
           title={renameTitle}
-          onClick={(e) => { e.stopPropagation(); onRename(); }}
+          onClick={(e) => { e.stopPropagation(); setRevealed(false); onRename(); }}
           onDoubleClick={(e) => e.stopPropagation()}
           style={{
             display: "flex", alignItems: "center", justifyContent: "center",
-            padding: 3, borderRadius: 4, color: "inherit",
-            opacity: hover ? 0.9 : 0,
-            transition: "opacity 120ms",
+            padding: 3, borderRadius: 4, color: "inherit", opacity: 0.9,
           }}
         >
           <Icons.Pencil width={10} height={10} />
         </span>
       )}
-      {onDelete && (
+      {revealed && onDelete && (
         <span
           title={deleteTitle}
-          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          onClick={(e) => { e.stopPropagation(); setRevealed(false); onDelete(); }}
           style={{
             display: "flex", alignItems: "center", justifyContent: "center",
-            padding: 3, borderRadius: 4, color: "inherit",
-            opacity: hover ? 0.9 : 0,
-            transition: "opacity 120ms",
+            padding: 3, borderRadius: 4, color: "inherit", opacity: 0.9,
           }}
         >
           <Icons.X width={10} height={10} />
@@ -1175,17 +1174,22 @@ function stripNick(title: string, nick: string): string {
  * название бита, без BPM, авторов и ника продюсера из имени файла; {bpm}
  * берётся из анализа, а при его отсутствии — из имени файла; {nick} — тег
  * продюсера из настроек. */
-function renderYtVars(tpl: string, b: YtBeat, nick: string, authors: string[]): string {
+function renderYtVars(tpl: string, b: YtBeat, nick: string, authors: string[], roster = ""): string {
   const stem = b.name.replace(/\.[^.]+$/, "");
   const parsed = beatTitleFromStem(stem, b.bpm);
   const bpm = b.bpm ? Math.round(b.bpm) : parsed.bpm;
+  const nlc = nick.trim().toLowerCase();
+  const typeArtists = authors.filter((a) => a.trim().toLowerCase() !== nlc);
+  const year = new Date().getFullYear();
   return tpl
     .split("{name}").join(stripNick(parsed.title, nick))
     .split("{type}").join(b.typeName)
     .split("{bpm}").join(bpm ? String(bpm) : "")
     .split("{key}").join(b.key ?? "")
     .split("{nick}").join(nick.trim())
-    .split("{authors}").join(joinAuthors(authors));
+    .split("{authors}").join(joinAuthors(authors))
+    .split("{keywords}").join(buildKeywords(typeArtists, roster, year))
+    .split("{hashtags}").join(buildHashtags(typeArtists));
 }
 
 /** Разворачивает шаблон «{type} type beat — {name}» и подчищает мусорные
@@ -1196,6 +1200,10 @@ function renderYtTemplate(tpl: string, b: YtBeat, nick: string, authors: string[
   s = s.replace(/\s{2,}/g, " ").replace(/^[\s—\-·,|]+/, "").replace(/[\s—\-·,|]+$/, "");
   return s.trim() || beatTitleFromStem(stem, b.bpm).title;
 }
+
+/** Ручная правка одного видео пачки. Незаданное поле наследуется из шаблона —
+ * так правка шаблона не затирает то, что уже поправили руками. */
+type BeatEdit = { title?: string; desc?: string; tags?: string; privacy?: string };
 
 /** Полный список авторов бита: распознанные из имени (+ свой ник первым) плюс
  * ручные добавления пачки. Псевдонимы/удаления применяются внутри parseAuthors. */
@@ -1239,14 +1247,197 @@ function cssFontFor(key: string): string {
   return YT_FONTS.find((f) => f.key === key)?.css ?? "Arial, sans-serif";
 }
 
-/** MIME по расширению — для Blob обложки, читаемой с диска байтами. */
-function imageMime(path: string): string {
-  const ext = path.split(".").pop()?.toLowerCase() ?? "";
-  return ext === "png" ? "image/png"
-    : ext === "webp" ? "image/webp"
-    : ext === "gif" ? "image/gif"
-    : ext === "bmp" ? "image/bmp"
-    : "image/jpeg";
+/** Свой шрифт задаётся путём к файлу, системный — ключом из YT_FONTS. */
+function isCustomFont(key: string): boolean {
+  return /[\\/]/.test(key);
+}
+
+/** Подпись своего шрифта в списке — имя файла без расширения. */
+function fontLabel(path: string): string {
+  return fileName(path).replace(/\.(ttf|otf)$/i, "");
+}
+
+/** Левая панель: все видео пачки сразу — обложка, итоговое название, авторы
+ * этого бита, точка «правлено руками» и статус загрузки. Обзор, которого не
+ * было: раньше всё это лежало в конце длинного скролла. */
+function VideoList({ beats, focus, setFocus, assign, edits, extras, nick, aliases, resolveBeat, statusFor, onPick, onCycle, onReshuffle, busy, isFl }: {
+  beats: YtBeat[];
+  focus: string;
+  setFocus: (p: string) => void;
+  assign: Record<string, PinImage>;
+  edits: Record<string, BeatEdit>;
+  extras: Record<string, string[]>;
+  nick: string;
+  aliases: Record<string, string>;
+  resolveBeat: (b: YtBeat) => { title: string };
+  statusFor: (p: string) => { text: string; failed?: boolean; url?: string };
+  onPick: (p: string) => void;
+  onCycle: (p: string) => void;
+  onReshuffle: () => void;
+  busy: boolean;
+  isFl: boolean;
+}) {
+  const t = useT();
+  const line = isFl ? "var(--line-work)" : "var(--border)";
+  return (
+    <div style={{ width: 262, flexShrink: 0, borderRight: `1px solid ${line}`, display: "flex", flexDirection: "column", background: isFl ? "var(--work-2)" : "var(--surface-1, transparent)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 10px", borderBottom: `1px solid ${line}`, flexShrink: 0 }}>
+        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", color: isFl ? "var(--ink-dim)" : "var(--text-faint)" }}>
+          {t.player.ytAllVideos}
+        </span>
+        <button
+          onClick={onReshuffle}
+          disabled={busy}
+          title={t.player.ytCoversHint}
+          style={{
+            marginLeft: "auto", border: `1px solid ${line}`, borderRadius: 5, background: "transparent",
+            color: isFl ? "var(--ink-dim)" : "var(--text-muted)", fontSize: 10, padding: "2px 7px",
+            cursor: busy ? "default" : "pointer", opacity: busy ? 0.5 : 1,
+          }}
+        >🎲 {t.player.ytCoversReshuffle}</button>
+      </div>
+      <div style={{ flex: 1, overflowY: "auto" }}>
+        {beats.map((b) => {
+          const st = statusFor(b.path);
+          const cover = assign[b.path];
+          const sel = focus === b.path;
+          const authors = beatAuthors(b, nick, aliases, extras[b.path] ?? []);
+          return (
+            <div
+              key={b.path}
+              onClick={() => setFocus(b.path)}
+              style={{
+                display: "flex", alignItems: "center", gap: 7, padding: "7px 9px",
+                borderBottom: `1px solid ${line}`, cursor: "pointer",
+                background: sel ? (isFl ? "var(--work-3)" : "var(--surface-3)") : "transparent",
+                boxShadow: sel ? "inset 2px 0 0 var(--accent)" : undefined,
+              }}
+            >
+              {cover?.thumb ? (
+                <img
+                  src={cover.thumb} alt="" loading="lazy"
+                  title={t.player.ytCoverPick}
+                  onClick={(e) => { e.stopPropagation(); onPick(b.path); }}
+                  style={{ width: 42, height: 28, objectFit: "cover", borderRadius: 4, flexShrink: 0, background: "#000", border: `1px solid ${line}` }}
+                />
+              ) : (
+                <div
+                  title={t.player.ytCoverPick}
+                  onClick={(e) => { e.stopPropagation(); onPick(b.path); }}
+                  style={{ width: 42, height: 28, borderRadius: 4, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: isFl ? "var(--groove)" : "var(--surface-3)", border: `1px solid ${line}`, color: isFl ? "var(--ink-dim)" : "var(--text-faint)" }}
+                >
+                  <Icons.Search width={11} height={11} />
+                </div>
+              )}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                  {edits[b.path] && (
+                    <span title={t.player.ytEdited} style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--accent)", flexShrink: 0 }} />
+                  )}
+                  <span style={{ flex: 1, fontSize: 11, lineHeight: 1.3, color: isFl ? "var(--ink-on-work)" : "var(--text-body)", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
+                    {resolveBeat(b).title}
+                  </span>
+                </div>
+                {/* Авторы каждого бита — разницу по пачке видно, не открывая */}
+                <span style={{ fontSize: 9.5, color: isFl ? "var(--ink-dim)" : "var(--text-faint)", overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis", display: "block" }}>
+                  {authors.join(" × ") || "—"}
+                </span>
+                {st.text && (
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 9.5, color: st.failed ? "var(--rec, #ff453a)" : st.url ? "var(--positive, #46d46a)" : (isFl ? "var(--ink-dim)" : "var(--text-faint)") }}>
+                    {st.text}
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={(e) => { e.stopPropagation(); onCycle(b.path); }}
+                title={t.player.ytCoverCycle}
+                style={{ border: `1px solid ${line}`, borderRadius: 4, background: "transparent", width: 22, height: 22, padding: 0, cursor: "pointer", flexShrink: 0, fontSize: 11 }}
+              >🎲</button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** Инлайн-редактор выбранного видео пачки. Поля показывают итоговые значения
+ * (свои либо из шаблона); правка делает их своими, ↺ возвращает шаблону. */
+function BeatEditor({ b, v, e, onEdit, isFl }: {
+  b: YtBeat;
+  v: { title: string; description: string; tags: string; privacy: string };
+  e: BeatEdit;
+  onEdit: (path: string, patch: BeatEdit) => void;
+  isFl: boolean;
+}) {
+  const t = useT();
+  const line = isFl ? "var(--line-work)" : "var(--border)";
+  const field: React.CSSProperties = {
+    width: "100%",
+    padding: "5px 8px",
+    background: isFl ? "var(--groove)" : "var(--surface-input, var(--surface-3))",
+    border: `1px solid ${line}`,
+    borderRadius: 6,
+    color: isFl ? "var(--ink-on-work)" : "var(--text-body)",
+    fontFamily: "var(--font-sans)",
+    fontSize: 12,
+    outline: "none",
+  };
+  const cap: React.CSSProperties = {
+    fontSize: 10, fontWeight: 700, letterSpacing: "0.8px", textTransform: "uppercase",
+    color: isFl ? "var(--ink-dim)" : "var(--text-faint)",
+  };
+
+  // ↺ активна только когда поле переопределено — иначе сбрасывать нечего.
+  const reset = (k: keyof BeatEdit) => (
+    <button
+      onClick={() => onEdit(b.path, { [k]: undefined })}
+      disabled={e[k] === undefined}
+      title={t.player.ytResetToTemplate}
+      style={{
+        border: `1px solid ${line}`, borderRadius: 5, background: "transparent",
+        color: isFl ? "var(--ink-dim)" : "var(--text-faint)",
+        cursor: e[k] === undefined ? "default" : "pointer",
+        opacity: e[k] === undefined ? 0.35 : 1,
+        width: 22, height: 20, lineHeight: 1, flexShrink: 0, fontSize: 12,
+      }}
+    >↺</button>
+  );
+
+  const head = (label: string, k: keyof BeatEdit) => (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
+      <span style={cap}>{label}</span>
+      {reset(k)}
+    </div>
+  );
+
+  return (
+    <div
+      onClick={(ev) => ev.stopPropagation()}
+      style={{ display: "flex", flexDirection: "column", gap: 6, padding: "8px 10px 10px 10px", background: isFl ? "var(--work-2)" : "var(--surface-2, transparent)" }}
+    >
+      {head(t.player.ytEditTitle, "title")}
+      <input value={v.title} onChange={(ev) => onEdit(b.path, { title: ev.target.value })} style={field} spellCheck={false} />
+
+      {head(t.player.ytEditDesc, "desc")}
+      <textarea value={v.description} onChange={(ev) => onEdit(b.path, { desc: ev.target.value })} rows={3} style={{ ...field, resize: "vertical", fontFamily: "var(--font-sans)" }} spellCheck={false} />
+
+      <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
+          {head(t.player.ytEditTags, "tags")}
+          <input value={v.tags} onChange={(ev) => onEdit(b.path, { tags: ev.target.value })} style={field} spellCheck={false} />
+        </div>
+        <div style={{ width: 150, display: "flex", flexDirection: "column", gap: 4 }}>
+          {head(t.player.ytPrivacy, "privacy")}
+          <select value={v.privacy} onChange={(ev) => onEdit(b.path, { privacy: ev.target.value })} style={{ ...field, cursor: "pointer" }}>
+            <option value="public">{t.player.ytPrivacyPublic}</option>
+            <option value="unlisted">{t.player.ytPrivacyUnlisted}</option>
+            <option value="private">{t.player.ytPrivacyPrivate}</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boolean; onClose: () => void }) {
@@ -1262,11 +1453,17 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
   // Авторы: карта правок (persist в настройки — «память») + ручные добавления
   // пачки (session). Редактирование чипсов пишет в эти два состояния.
   const [aliases, setAliases] = React.useState<Record<string, string>>(settings?.ytAuthorAliases ?? {});
-  const [extras, setExtras] = React.useState<string[]>([]);
+  // Ручные добавления авторов — по биту: авторы распознаются из имени файла,
+  // значит это свойство видео. Общим списком они приклеивались ко всем битам
+  // пачки сразу.
+  const [extras, setExtras] = React.useState<Record<string, string[]>>({});
+  // Ручные правки конкретных видео пачки: undefined у поля = наследуется из
+  // шаблона, заданное = своё. Поэтому правка шаблона переписывает только те
+  // видео, где поле не трогали. Живут в диалоге: они про эту пачку.
+  const [edits, setEdits] = React.useState<Record<string, BeatEdit>>({});
   const [editIdx, setEditIdx] = React.useState<number | null>(null);
   const [editVal, setEditVal] = React.useState("");
   const [addVal, setAddVal] = React.useState("");
-  const [coverUrl, setCoverUrl] = React.useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
   const [previewBusy, setPreviewBusy] = React.useState(false);
   const [previewErr, setPreviewErr] = React.useState<string | null>(null);
@@ -1274,6 +1471,8 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
   const [desc, setDesc] = React.useState(settings?.ytDescription ?? "");
   const [tags, setTags] = React.useState(settings?.ytTags ?? "");
   const [privacy, setPrivacy] = React.useState(settings?.ytPrivacy || "public");
+  const [roster, setRoster] = React.useState(settings?.ytKeywordRoster ?? "");
+  const [rosterAutoGrow, setRosterAutoGrow] = React.useState(settings?.ytRosterAutoGrow ?? true);
   const [ytOk, setYtOk] = React.useState<boolean | null>(null);
   // ffmpeg: null — ещё проверяем; false — не найден (показываем плашку с
   // объяснением и кнопкой автоскачивания).
@@ -1283,6 +1482,9 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
   // путь бита → id джобы ("" = не удалось поставить в очередь).
   const [jobMap, setJobMap] = React.useState<Record<string, string>>({});
   const [started, setStarted] = React.useState(false);
+  // Вкладка правой панели. Имя вкладки — это и есть ответ на вопрос «на что
+  // повлияет то, что я тут правлю».
+  const [tab, setTab] = React.useState<"video" | "shared">("video");
 
   // Тайп-артисты пачки — источник автоподбора тегов и обложек.
   const artists = React.useMemo(
@@ -1290,14 +1492,25 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
     [beats],
   );
   const [tagsBusy, setTagsBusy] = React.useState(false);
-  // Pinterest-пикер обложки: null = свёрнут.
+  // Pinterest-пикер обложки: null = свёрнут. target — путь бита, которому
+  // назначаем обложку (null = единая обложка пачки, старое поведение).
   const [pin, setPin] = React.useState<{
     q: string;
     items: PinImage[];
     loading: boolean;
     err: string | null;
     picking: string | null;
+    target?: string | null;
   } | null>(null);
+
+  // Пачка (>1 бита) → разные обложки по тайп-артисту. pools — перемешанный пул
+  // на каждый тайп; assign — назначенная (пока НЕ скачанная) обложка бита;
+  // focus — бит в большом превью. Скачиваем полную картинку только на загрузке.
+  const isBatch = beats.length > 1;
+  const [pools, setPools] = React.useState<Record<string, PinImage[]>>({});
+  const [assign, setAssign] = React.useState<Record<string, PinImage>>({});
+  const [focus, setFocus] = React.useState<string>(beats[0]?.path ?? "");
+  const focusBeat = beats.find((b) => b.path === focus) ?? beats[0];
 
   async function autoTags() {
     if (!artists.length) {
@@ -1324,7 +1537,9 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
     }
     setPin((p) => (p ? { ...p, loading: true, err: null } : p));
     try {
-      const { items } = await api.coversSearch(query, 40);
+      // Лимит — это «аппетит», а не обещание: одна страница Bing даёт ~37
+      // картинок, поэтому бэкенд доберёт остальное вариантами запроса.
+      const { items } = await api.coversSearch(query, 120);
       setPin((p) => (p ? { ...p, items, loading: false, err: items.length ? null : t.player.ytPinEmpty } : p));
     } catch (e) {
       setPin((p) => (p ? { ...p, items: [], loading: false, err: e instanceof Error ? e.message : String(e) } : p));
@@ -1338,6 +1553,13 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
   }
 
   async function pinPick(img: PinImage) {
+    // Режим «на конкретный бит»: только запоминаем выбор (без скачивания).
+    const target = pin?.target ?? null;
+    if (target) {
+      setAssign((a) => ({ ...a, [target]: img }));
+      setPin(null);
+      return;
+    }
     setPin((p) => (p ? { ...p, picking: img.full, err: null } : p));
     try {
       const { path } = await api.coversDownload(img.full);
@@ -1356,22 +1578,83 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
     void pinPick(pool[Math.floor(Math.random() * pool.length)]);
   }
 
-  // Авторы репрезентативного (первого) бита — для превью и чипсов.
-  const repAuthors = React.useMemo(
-    () => (beats[0] ? beatAuthors(beats[0], nick, aliases, extras) : []),
-    [beats, nick, aliases, extras],
-  );
-  const ov = React.useMemo(
-    () => (beats[0] ? overlayLinesFor(beats[0], nick, repAuthors) : { title: "", sub: "" }),
-    [beats, nick, repAuthors],
-  );
+  // ── Разные обложки на пачку по тайп-артисту ────────────────────────────────
+  const shuffled = <T,>(a: T[]): T[] => {
+    const x = [...a];
+    for (let i = x.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [x[i], x[j]] = [x[j], x[i]]; }
+    return x;
+  };
 
+  // Тянет пулы (по одному на уникальный тайп) и раздаёт разные обложки битам.
+  // force=true — перекачать выдачу; иначе перетасовать уже загруженные пулы.
+  const [assignBusy, setAssignBusy] = React.useState(false);
+  async function autoAssign(force = false) {
+    const types = Array.from(new Set(beats.map((b) => b.typeName.trim()).filter(Boolean)));
+    if (!types.length) return;
+    setAssignBusy(true);
+    const next: Record<string, PinImage[]> = { ...pools };
+    for (const ty of types) {
+      if (force || !next[ty] || next[ty].length === 0) {
+        try { next[ty] = shuffled((await api.coversSearch(`${ty} aesthetic`, 40)).items); }
+        catch { next[ty] = []; }
+      } else {
+        next[ty] = shuffled(next[ty]);
+      }
+    }
+    const na: Record<string, PinImage> = {};
+    const idx: Record<string, number> = {};
+    for (const b of beats) {
+      const ty = b.typeName.trim();
+      const pool = ty ? next[ty] : undefined;
+      if (pool && pool.length) {
+        const i = idx[ty] ?? 0;
+        na[b.path] = pool[i % pool.length];
+        idx[ty] = i + 1;
+      }
+    }
+    setPools(next);
+    setAssign(na);
+    setAssignBusy(false);
+  }
+
+  // 🎲 на бите: следующая картинка пула его тайпа (по кругу).
+  function cycleBeat(path: string) {
+    const b = beats.find((x) => x.path === path);
+    const ty = b?.typeName.trim() ?? "";
+    const pool = pools[ty] ?? [];
+    if (!pool.length) return;
+    const cur = assign[path];
+    const curIdx = cur ? pool.findIndex((p) => p.full === cur.full) : -1;
+    setAssign((a) => ({ ...a, [path]: pool[(curIdx + 1) % pool.length] }));
+  }
+
+  // Клик по обложке бита — открыть пикер именно для него.
+  function pickForBeat(path: string) {
+    const b = beats.find((x) => x.path === path);
+    const q = b?.typeName.trim() ? `${b.typeName.trim()} aesthetic` : "";
+    setPin({ q, items: [], loading: false, err: null, picking: null, target: path });
+    if (q) void pinSearch(q);
+  }
+
+  // Автораздача при открытии пачки (один раз).
+  React.useEffect(() => {
+    if (isBatch) void autoAssign(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Авторы фокус-бита (в пачке — выбранного в списке; иначе единственного) —
+  // для большого превью. Чипсы авторов по-прежнему берут первый бит.
+  const repAuthors = React.useMemo(
+    () => (focusBeat ? beatAuthors(focusBeat, nick, aliases, extras[focusBeat.path] ?? []) : []),
+    [focusBeat, nick, aliases, extras],
+  );
   // Чипсы = распознанные соавторы (без своего ника) + ручные добавления. У
   // каждого чипа source = исходный токен из имени (для записи правки в алиасы)
   // или null для добавленного вручную.
+  // Чипсы авторов — выбранного бита: у каждого свои авторы, из своего имени.
   const chips = React.useMemo(() => {
-    const stem = beats[0]?.name.replace(/\.[^.]+$/, "") ?? "";
-    const raw = parseAuthors(stem, { bpm: beats[0]?.bpm }); // без ника и алиасов
+    const stem = focusBeat?.name.replace(/\.[^.]+$/, "") ?? "";
+    const raw = parseAuthors(stem, { bpm: focusBeat?.bpm }); // без ника и алиасов
     const out: { source: string | null; value: string }[] = [];
     const seen = new Set<string>();
     // Свой ник показан отдельной пилюлей слева — в чипсы-соавторы не дублируем.
@@ -1385,68 +1668,228 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
       seen.add(v.toLowerCase());
       out.push({ source: t, value: v });
     }
-    for (const e of extras) {
+    for (const e of extras[focusBeat?.path ?? ""] ?? []) {
       const v = e.trim();
       if (v && !seen.has(v.toLowerCase())) { seen.add(v.toLowerCase()); out.push({ source: null, value: v }); }
     }
     return out;
-  }, [beats, nick, aliases, extras]);
+  }, [focusBeat, nick, aliases, extras]);
 
   function persistAliases(next: Record<string, string>) {
     setAliases(next);
     void updateSettings({ ytAuthorAliases: next });
   }
 
+  // Правка ручного автора этого бита. Переименование распознанного идёт через
+  // aliases — это словарь опечаток, общий по замыслу: «hoodrunah → hoodrunnah»
+  // чинится один раз и везде.
+  function setBeatExtras(path: string, fn: (xs: string[]) => string[]) {
+    setExtras((prev) => {
+      const next = fn(prev[path] ?? []);
+      if (!next.length) {
+        const { [path]: _drop, ...rest } = prev;
+        return rest;
+      }
+      return { ...prev, [path]: next };
+    });
+  }
+
   function commitChipEdit(i: number) {
     const c = chips[i];
     const v = editVal.trim();
     setEditIdx(null);
-    if (!c || v === c.value) return;
+    if (!c || v === c.value || !focusBeat) return;
     if (c.source != null) {
       persistAliases({ ...aliases, [c.source]: v }); // "" = удалить из авторов
     } else {
-      setExtras((xs) => xs.flatMap((x) => (x.trim() === c.value ? (v ? [v] : []) : [x])));
+      setBeatExtras(focusBeat.path, (xs) => xs.flatMap((x) => (x.trim() === c.value ? (v ? [v] : []) : [x])));
     }
   }
 
   function removeChip(i: number) {
     const c = chips[i];
-    if (!c) return;
+    if (!c || !focusBeat) return;
     if (c.source != null) persistAliases({ ...aliases, [c.source]: "" });
-    else setExtras((xs) => xs.filter((x) => x.trim() !== c.value));
+    else setBeatExtras(focusBeat.path, (xs) => xs.filter((x) => x.trim() !== c.value));
   }
 
   function addChip() {
     const v = addVal.trim();
     setAddVal("");
-    if (v && !chips.some((c) => c.value.toLowerCase() === v.toLowerCase())) setExtras((xs) => [...xs, v]);
+    if (!focusBeat) return;
+    if (v && !chips.some((c) => c.value.toLowerCase() === v.toLowerCase())) {
+      setBeatExtras(focusBeat.path, (xs) => [...xs, v]);
+    }
   }
 
-  // Blob обложки для предпросмотра: читаем файл байтами (asset-протокол не нужен).
+  // Значения конкретного видео: ручная правка, иначе — из шаблона пачки. Один
+  // источник правды для списка, превью и самой загрузки: разойдись они, на
+  // YouTube уехало бы не то, что показано в диалоге.
+  const resolveBeat = React.useCallback((b: YtBeat) => {
+    const e = edits[b.path] ?? {};
+    const authors = beatAuthors(b, nick, aliases, extras[b.path] ?? []);
+    return {
+      title: e.title ?? renderYtTemplate(tpl, b, nick, authors),
+      description: e.desc ?? renderYtVars(desc, b, nick, authors, roster),
+      tags: e.tags ?? tags,
+      privacy: e.privacy ?? privacy,
+    };
+  }, [edits, tpl, desc, tags, privacy, nick, aliases, extras, roster]);
+
+  // Правка поля видео. Значение undefined снимает переопределение — поле снова
+  // начинает слушаться шаблона.
+  function editBeat(path: string, patch: BeatEdit) {
+    setEdits((prev) => {
+      const next = { ...(prev[path] ?? {}), ...patch };
+      for (const k of Object.keys(next) as (keyof BeatEdit)[]) {
+        if (next[k] === undefined) delete next[k];
+      }
+      if (!Object.keys(next).length) {
+        const { [path]: _drop, ...rest } = prev;
+        return rest;
+      }
+      return { ...prev, [path]: next };
+    });
+  }
+
+  // Свои шрифты живут в настройках, поэтому переживают перезапуск. Выбранный
+  // попадает в font как путь к файлу — resolveFont в Go принимает и путь, и ключ.
+  const customFonts = settings?.ytCustomFonts ?? [];
+
+  async function addFonts() {
+    const picked = await pickFonts();
+    if (!picked.length) return;
+    await updateSettings({ ytCustomFonts: Array.from(new Set([...customFonts, ...picked])) });
+    setFont(picked[picked.length - 1]);
+  }
+
+  async function removeFont(path: string) {
+    await updateSettings({ ytCustomFonts: customFonts.filter((p) => p !== path) });
+    if (font === path) setFont("arial");
+  }
+
+  // Локальный путь обложки фокус-бита: в пачке обложка ещё не скачана (в UI
+  // висит удалённый thumb), поэтому качаем её на диск. Кэш по URL — иначе
+  // дебаунс кадра дёргал бы сеть на каждую правку текста.
+  const coverCache = React.useRef<Map<string, string>>(new Map());
+  const localCoverPath = React.useCallback(async (beatPath: string): Promise<string> => {
+    if (!isBatch) return image;
+    const a = assign[beatPath];
+    if (!a) return "";
+    const hit = coverCache.current.get(a.full);
+    if (hit) return hit;
+    const { path } = await api.coversDownload(a.full);
+    coverCache.current.set(a.full, path);
+    return path;
+  }, [isBatch, image, assign]);
+
+  // Статичное превью — настоящий кадр из ffmpeg, тем же фильтром, что и итоговое
+  // видео (см. buildChain в ffmpeg.go). Рисовать его же вручную на CSS нельзя:
+  // копии геометрии неизбежно разъезжаются.
+  const [frameUrl, setFrameUrl] = React.useState<string | null>(null);
+  const [frameErr, setFrameErr] = React.useState<string | null>(null);
+
+  // Кэш готовых кадров по совокупности параметров рендера. Без него каждое
+  // переключение бита заново гоняло ffmpeg (~0.5 с) плюс 400 мс дебаунса —
+  // возврат к уже виденному биту тормозил на ровном месте. Ключ включает всё,
+  // что влияет на картинку: сам бит, его обложку, наложение и шрифт. Blob-URL
+  // из кэша не отзываем при переключении — только при закрытии диалога.
+  const frameCache = React.useRef<Map<string, string>>(new Map());
   React.useEffect(() => {
+    const cache = frameCache.current;
+    return () => { for (const url of cache.values()) URL.revokeObjectURL(url); };
+  }, []);
+
+  // Параметры кадра конкретного бита (у каждого свои авторы → своя подпись).
+  const overlayFor = React.useCallback((b: YtBeat) => {
+    const authors = beatAuthors(b, nick, aliases, extras[b.path] ?? []);
+    return overlayLinesFor(b, nick, authors);
+  }, [nick, aliases, extras]);
+  const coverIdFor = React.useCallback(
+    (b: YtBeat) => (isBatch ? (assign[b.path]?.full ?? "") : image),
+    [isBatch, assign, image],
+  );
+  const frameKeyFor = React.useCallback((b: YtBeat) => {
+    const { title, sub } = overlayFor(b);
+    return `${b.path}|${coverIdFor(b)}|${overlay ? 1 : 0}|${overlay ? title : ""}|${overlay ? sub : ""}|${font}`;
+  }, [overlayFor, coverIdFor, overlay, font]);
+
+  // Рендерит кадр бита (или отдаёт из кэша). Возвращает Blob-URL либо null,
+  // если рендер прерван/нет обложки. Используется и фокус-эффектом, и предгревом.
+  const renderFrameFor = React.useCallback(async (b: YtBeat, alive: () => boolean): Promise<string | null> => {
+    const key = frameKeyFor(b);
+    const hit = frameCache.current.get(key);
+    if (hit) return hit;
+    const { title, sub } = overlayFor(b);
+    const imagePath = await localCoverPath(b.path);
+    if (!alive() || !imagePath) return null;
+    const { path } = await api.ytPreviewFrame({
+      imagePath, overlay, overlayTitle: title, overlaySub: sub, overlayFont: font,
+    });
+    const buf = await invoke<ArrayBuffer>("player_read_audio", { path });
+    // Кэшируем всегда (пригодится при возврате), даже если фокус уже ушёл.
+    const cached = frameCache.current.get(key);
+    if (cached) return cached;
+    const url = URL.createObjectURL(new Blob([buf], { type: "image/png" }));
+    frameCache.current.set(key, url);
+    return url;
+  }, [frameKeyFor, overlayFor, localCoverPath, overlay, font]);
+
+  // Кадр фокус-бита: попадание в кэш — мгновенно (без дебаунса), промах —
+  // короткий дебаунс, чтобы прощёлкивание списка не запускало ffmpeg на каждый
+  // промежуточный бит.
+  React.useEffect(() => {
+    const b = focusBeat;
+    if (!b) return;
+    const key = frameKeyFor(b);
+    const hit = frameCache.current.get(key);
+    if (hit) { setFrameUrl(hit); setFrameErr(null); return; }
     let dead = false;
-    let url: string | null = null;
-    setCoverUrl(null);
-    if (image && isTauri()) {
-      invoke<ArrayBuffer>("player_read_audio", { path: image })
-        .then((buf) => {
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const url = await renderFrameFor(b, () => !dead);
+          if (dead || !url) return;
+          setFrameUrl(url);
+          setFrameErr(null);
+        } catch (e) {
+          if (!dead) setFrameErr(e instanceof Error ? e.message : String(e));
+        }
+      })();
+    }, 180);
+    return () => { dead = true; clearTimeout(timer); };
+  }, [focusBeat, frameKeyFor, renderFrameFor]);
+
+  // Фоновый предгрев: после паузы дорисовываем кадры остальных битов пачки по
+  // одному, чтобы клики по списку попадали в кэш и открывались мгновенно.
+  // Последовательно и прерываемо — один ffmpeg за раз, без штурма CPU.
+  React.useEffect(() => {
+    if (!isBatch || beats.length < 2) return;
+    let dead = false;
+    const timer = setTimeout(() => {
+      void (async () => {
+        for (const b of beats) {
           if (dead) return;
-          url = URL.createObjectURL(new Blob([buf], { type: imageMime(image) }));
-          setCoverUrl(url);
-        })
-        .catch(() => {});
-    }
-    return () => { dead = true; if (url) URL.revokeObjectURL(url); };
-  }, [image]);
+          if (frameCache.current.has(frameKeyFor(b))) continue;
+          if (isBatch && !assign[b.path]) continue; // обложка ещё не выбрана
+          try { await renderFrameFor(b, () => !dead); } catch { /* предгрев — тихо */ }
+        }
+      })();
+    }, 700);
+    return () => { dead = true; clearTimeout(timer); };
+  }, [isBatch, beats, assign, frameKeyFor, renderFrameFor]);
 
   // Рендер короткого mp4 на бэкенде + проигрывание в webview (Blob).
   async function makePreview() {
-    if (!beats[0] || !image) { setPreviewErr(t.player.ytNeedImage); return; }
+    const b = focusBeat;
+    if (!b) { setPreviewErr(t.player.ytNeedImage); return; }
     setPreviewBusy(true); setPreviewErr(null);
     try {
-      const lines = overlayLinesFor(beats[0], nick, repAuthors);
+      const imagePath = await localCoverPath(b.path);
+      if (!imagePath) { setPreviewErr(t.player.ytNeedImage); setPreviewBusy(false); return; }
+      const lines = overlayLinesFor(b, nick, repAuthors);
       const { path } = await api.ytPreview({
-        audioPath: beats[0].path, imagePath: image,
+        audioPath: b.path, imagePath,
         overlay, overlayTitle: lines.title, overlaySub: lines.sub, overlayFont: font,
       });
       const buf = await invoke<ArrayBuffer>("player_read_audio", { path });
@@ -1545,23 +1988,34 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
   async function start() {
     if (!ytOk) { setErr(t.player.ytNeedSetup); return; }
     if (ffmpegOk === false) { setErr(t.settings.ytFfmpegMissing); return; }
-    if (!image) { setErr(t.player.ytNeedImage); return; }
+    const anyCover = isBatch ? beats.some((b) => assign[b.path]) : !!image;
+    if (!anyCover) { setErr(t.player.ytNeedImage); return; }
     setErr(null);
     setStarted(true);
-    // Значения формы становятся дефолтами следующей загрузки.
-    void updateSettings({ ytDefaultImage: image, ytNickname: nick, ytNoTextOverlay: !overlay, ytFont: font, ytAuthorAliases: aliases, ytTitleTemplate: tpl, ytDescription: desc, ytTags: tags, ytPrivacy: privacy });
+    // Значения формы становятся дефолтами следующей загрузки. В пачке единую
+    // обложку не трогаем (у каждого бита своя) — сохраняем прежний дефолт.
+    void updateSettings({ ytDefaultImage: image || (settings?.ytDefaultImage ?? ""), ytNickname: nick, ytNoTextOverlay: !overlay, ytFont: font, ytAuthorAliases: aliases, ytTitleTemplate: tpl, ytDescription: desc, ytTags: tags, ytPrivacy: privacy });
     const map: Record<string, string> = {};
     for (const b of beats) {
       try {
-        const authors = beatAuthors(b, nick, aliases, extras);
+        // Обложка бита: в пачке — своя (скачиваем полную сейчас); иначе единая.
+        let imagePath = image;
+        if (isBatch) {
+          const a = assign[b.path];
+          if (!a) { map[b.path] = ""; setJobMap({ ...map }); continue; }
+          imagePath = (await api.coversDownload(a.full)).path;
+        }
+        if (!imagePath) { map[b.path] = ""; setJobMap({ ...map }); continue; }
+        const authors = beatAuthors(b, nick, aliases, extras[b.path] ?? []);
         const lines = overlayLinesFor(b, nick, authors);
+        const v = resolveBeat(b);
         const { jobId } = await api.ytUpload({
           audioPath: b.path,
-          imagePath: image,
-          title: renderYtTemplate(tpl, b, nick, authors),
-          description: renderYtVars(desc, b, nick, authors),
-          tags: tags.split(",").map((s) => s.trim()).filter(Boolean),
-          privacy,
+          imagePath,
+          title: v.title,
+          description: v.description,
+          tags: v.tags.split(",").map((s) => s.trim()).filter(Boolean),
+          privacy: v.privacy,
           overlay,
           overlayTitle: lines.title,
           overlaySub: lines.sub,
@@ -1665,17 +2119,19 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          width: 580, maxWidth: "94vw", maxHeight: "88vh", overflowY: "auto",
+          // Пачка живёт в двух панелях (список слева, детали справа), одиночное
+          // видео — в одной колонке: там «общее» и «это видео» совпадают.
+          width: isBatch ? 1000 : 580, maxWidth: "94vw", height: isBatch ? "88vh" : undefined, maxHeight: "88vh",
           background: isFl ? "linear-gradient(var(--panel-hi), var(--panel))" : "var(--surface-2)",
           border: `1px solid ${isFl ? "var(--panel-lo)" : "var(--border)"}`,
           borderRadius: 12,
-          padding: "18px 20px",
-          display: "flex", flexDirection: "column", gap: 12,
+          display: "flex", flexDirection: "column",
+          overflow: "hidden",
           boxShadow: "0 12px 40px rgba(0,0,0,.5)",
         }}
       >
         {/* Заголовок */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 18px", borderBottom: `1px solid ${isFl ? "var(--line-work)" : "var(--border)"}`, flexShrink: 0 }}>
           <Icons.Yt width={16} height={16} style={{ color: "var(--accent)" }} />
           <span style={{ flex: 1, font: isFl ? "700 14px var(--font-sans)" : undefined, fontSize: isFl ? undefined : 15, fontWeight: isFl ? undefined : 700, color: isFl ? "var(--ink)" : "var(--text-strong, var(--text-body))" }}>
             {t.player.ytDialogTitle}
@@ -1688,6 +2144,8 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
           </button>
         </div>
 
+        {/* Предупреждения над рабочей областью */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: (ytOk === false || ffmpegOk === false) ? "12px 18px 0 18px" : 0, flexShrink: 0 }}>
         {/* Подключение не настроено */}
         {ytOk === false && (
           <div style={{ padding: "8px 12px", borderRadius: 7, background: "rgba(255,69,58,.12)", border: "1px solid rgba(255,69,58,.4)", color: "var(--rec, #ff453a)", fontSize: 12.5 }}>
@@ -1732,23 +2190,68 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
           </div>
         )}
 
-        {/* Обложка */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={labelStyle}>{t.player.ytCover}</span>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <div style={{ ...inputStyle, display: "flex", alignItems: "center", overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis", fontFamily: "var(--font-mono)", fontSize: 11, color: image ? undefined : (isFl ? "var(--ink-dim)" : "var(--text-faint)") }}>
-              {image || t.player.ytNoImage}
-            </div>
-            <button onClick={pickImage} style={{ ...chromeBtn, flexShrink: 0 }}>
-              <Icons.Folder width={12} height={12} />
-              {t.player.ytPickImage}
-            </button>
-            <button onClick={openPinterest} title={t.player.ytPinterestTitle} style={{ ...chromeBtn, flexShrink: 0 }}>
-              <Icons.Search width={12} height={12} />
-              {t.player.ytPinterest}
-            </button>
-          </div>
         </div>
+
+        {/* Рабочая область: слева все видео, справа — выбранное */}
+        <div style={{ flex: 1, display: "flex", alignItems: "stretch", minHeight: 0 }}>
+
+          {isBatch && (
+            <VideoList
+              beats={beats} focus={focus} setFocus={setFocus}
+              assign={assign} edits={edits} extras={extras}
+              nick={nick} aliases={aliases}
+              resolveBeat={resolveBeat} statusFor={statusFor}
+              onPick={pickForBeat} onCycle={cycleBeat}
+              onReshuffle={() => void autoAssign(false)} busy={assignBusy}
+              isFl={isFl}
+            />
+          )}
+
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+            {/* Вкладки называют область действия вслух */}
+            {isBatch && (
+              <div style={{ display: "flex", gap: 4, padding: "10px 14px 0 14px", flexShrink: 0, borderBottom: `1px solid ${isFl ? "var(--line-work)" : "var(--border)"}` }}>
+                {([["video", t.player.ytTabVideo], ["shared", t.player.ytTabShared]] as const).map(([k, label]) => (
+                  <button
+                    key={k}
+                    onClick={() => setTab(k)}
+                    style={{
+                      border: `1px solid ${tab === k ? (isFl ? "var(--line-work)" : "var(--border)") : "transparent"}`,
+                      borderBottomColor: tab === k ? (isFl ? "var(--work-2)" : "var(--surface-2)") : "transparent",
+                      background: tab === k ? (isFl ? "var(--work-2)" : "var(--surface-2)") : "transparent",
+                      color: tab === k ? (isFl ? "var(--ink)" : "var(--text-body)") : (isFl ? "var(--ink-dim)" : "var(--text-faint)"),
+                      borderRadius: "7px 7px 0 0", padding: "6px 14px", marginBottom: -1,
+                      fontSize: 12, fontWeight: 600, cursor: "pointer",
+                    }}
+                  >{label}</button>
+                ))}
+              </div>
+            )}
+
+            <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 16px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
+
+        {/* ── Это видео ─────────────────────────────────────────────────── */}
+        {(!isBatch || tab === "video") && (<>
+
+        {/* Обложка: одна (один бит) или разные по тайп-артисту (пачка) */}
+        {!isBatch && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <span style={labelStyle}>{t.player.ytCover}</span>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <div style={{ ...inputStyle, display: "flex", alignItems: "center", overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis", fontFamily: "var(--font-mono)", fontSize: 11, color: image ? undefined : (isFl ? "var(--ink-dim)" : "var(--text-faint)") }}>
+                {image || t.player.ytNoImage}
+              </div>
+              <button onClick={pickImage} style={{ ...chromeBtn, flexShrink: 0 }}>
+                <Icons.Folder width={12} height={12} />
+                {t.player.ytPickImage}
+              </button>
+              <button onClick={openPinterest} title={t.player.ytPinterestTitle} style={{ ...chromeBtn, flexShrink: 0 }}>
+                <Icons.Search width={12} height={12} />
+                {t.player.ytPinterest}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Pinterest-пикер обложки */}
         {pin && (
@@ -1786,7 +2289,7 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
             ) : pin.err ? (
               <span style={{ fontSize: 12, color: "var(--rec, #ff453a)" }}>{pin.err}</span>
             ) : pin.items.length > 0 && (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 6, maxHeight: 230, overflowY: "auto" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(92px, 1fr))", gap: 6, maxHeight: 460, overflowY: "auto" }}>
                 {pin.items.map((img) => (
                   <img
                     key={img.full}
@@ -1806,50 +2309,46 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
           </div>
         )}
 
-        {/* Предпросмотр обложки/видео + переключатель текста на кадре */}
-        {image && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <span style={labelStyle}>{t.player.ytPreviewCover}</span>
-              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, cursor: "pointer", color: isFl ? "var(--ink-dim)" : "var(--text-muted)" }}>
-                <input type="checkbox" checked={overlay} onChange={(e) => setOverlay(e.target.checked)} />
-                {t.player.ytOverlayToggle}
-              </label>
+        {/* Кадр видео и обложка этого бита. В пачке показываем всегда: выбирать
+            обложку надо именно отсюда, а пряталось оно вместе с кадром. */}
+        {/* Кадр и поля этого видео — рядом. Раньше превью было вверху, а список
+            и правки внизу: отсюда и брались «глаза бегают туда-сюда». */}
+        <div style={{ display: "flex", flexDirection: isBatch ? "row" : "column", gap: 14, alignItems: "flex-start" }}>
+
+        {(isBatch || image) && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, width: isBatch ? 300 : "100%", flexShrink: 0 }}>
+            <span style={labelStyle}>{t.player.ytPreviewCover}</span>
+            <div style={{ position: "relative", width: "100%", aspectRatio: "16 / 9", borderRadius: 8, overflow: "hidden", background: "#000", border: `1px solid ${isFl ? "var(--line-work)" : "var(--border)"}` }}>
+              {/* Кадр из ffmpeg — тот же фильтр, что и у итогового видео. */}
+              {frameUrl ? (
+                <img src={frameUrl} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain" }} />
+              ) : (
+                // Кадр рендерится не мгновенно (скачать обложку + ffmpeg): без
+                // этой надписи чёрный прямоугольник читается как поломка.
+                <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "var(--text-faint, #777)" }}>
+                  {frameErr ? "" : (isBatch && !assign[focus]) ? t.player.ytNoImage : t.player.ytFrameRendering}
+                </span>
+              )}
             </div>
-            {overlay && (
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ ...labelStyle, flexShrink: 0 }}>{t.player.ytFont}</span>
-                <select
-                  value={font}
-                  onChange={(e) => setFont(e.target.value)}
-                  style={{ ...inputStyle, cursor: "pointer", fontFamily: cssFontFor(font) }}
-                >
-                  {YT_FONTS.map((f) => (
-                    <option key={f.key} value={f.key} style={{ fontFamily: f.css }}>{f.label}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-            <div style={{ position: "relative", width: "100%", aspectRatio: "16 / 9", containerType: "inline-size", borderRadius: 8, overflow: "hidden", background: "#000", border: `1px solid ${isFl ? "var(--line-work)" : "var(--border)"}` }}>
-              {coverUrl && (
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              {isBatch && (
                 <>
-                  <img src={coverUrl} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", filter: "blur(22px) brightness(0.7)", transform: "scale(1.12)" }} />
-                  <img src={coverUrl} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain" }} />
+                  <button onClick={() => pickForBeat(focus)} style={{ ...chromeBtn, flexShrink: 0 }}>
+                    <Icons.Search width={12} height={12} />
+                    {t.player.ytCoverPick}
+                  </button>
+                  <button onClick={() => cycleBeat(focus)} title={t.player.ytCoverCycle} style={{ ...chromeBtn, width: 32, padding: 0, justifyContent: "center", flexShrink: 0 }}>
+                    🎲
+                  </button>
                 </>
               )}
-              {overlay && ov.title && (
-                <div style={{ position: "absolute", left: 0, right: 0, top: "68%", textAlign: "center", padding: "0 6%", pointerEvents: "none" }}>
-                  <div style={{ color: "#fff", fontFamily: cssFontFor(font), fontWeight: 800, fontSize: "4.8cqw", lineHeight: 1.1, textShadow: "0 0.16cqw 0.5cqw rgba(0,0,0,.8)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{ov.title}</div>
-                  {ov.sub && <div style={{ color: "rgba(255,255,255,.9)", fontFamily: cssFontFor(font), fontWeight: 500, fontSize: "2.4cqw", marginTop: "0.6cqw", textShadow: "0 0.16cqw 0.5cqw rgba(0,0,0,.8)" }}>{ov.sub}</div>}
-                </div>
-              )}
-            </div>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <button onClick={() => void makePreview()} disabled={previewBusy} style={{ ...chromeBtn, flexShrink: 0, opacity: previewBusy ? 0.55 : 1 }}>
                 <Icons.Play width={12} height={12} />
                 {previewBusy ? t.player.ytPreviewRendering : t.player.ytPreviewVideo}
               </button>
-              {previewErr && <span style={{ fontSize: 12, color: "var(--rec, #ff453a)" }}>{previewErr}</span>}
+              {(previewErr ?? frameErr) && (
+                <span style={{ fontSize: 12, color: "var(--rec, #ff453a)" }}>{previewErr ?? frameErr}</span>
+              )}
             </div>
             {previewUrl && (
               <video src={previewUrl} controls autoPlay style={{ width: "100%", maxHeight: 280, borderRadius: 8, background: "#000", display: "block" }} />
@@ -1857,20 +2356,11 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
           </div>
         )}
 
-        {/* Ник продюсера: подставляется как {nick} и вычищается из {name} */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={labelStyle}>{t.player.ytNickname}</span>
-          <input
-            value={nick}
-            onChange={(e) => setNick(e.target.value)}
-            placeholder={t.player.ytNicknamePlaceholder}
-            style={inputStyle}
-            spellCheck={false}
-          />
-          <span style={{ fontSize: 11, color: isFl ? "var(--ink-dim)" : "var(--text-faint)" }}>{t.player.ytNicknameHint}</span>
-        </div>
+        {/* Колонка полей этого видео */}
+        <div style={{ flex: 1, minWidth: 0, width: isBatch ? undefined : "100%", display: "flex", flexDirection: "column", gap: 12 }}>
 
-        {/* Авторы бита: авто-распознавание из имени + правки (память псевдонимов) */}
+        {/* Авторы бита: авто-распознавание из имени + правки (память псевдонимов).
+            Свойство видео: у каждого бита свои авторы, из своего имени файла. */}
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <span style={labelStyle}>{t.player.ytAuthors}</span>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", padding: 6, borderRadius: 7, border: `1px solid ${isFl ? "var(--line-work)" : "var(--border)"}`, background: isFl ? "var(--work-3)" : "transparent" }}>
@@ -1907,6 +2397,75 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
             />
           </div>
           <span style={{ fontSize: 11, color: isFl ? "var(--ink-dim)" : "var(--text-faint)" }}>{t.player.ytAuthorsHint}</span>
+        </div>
+
+        {/* Поля этого видео: свои значения либо унаследованные из шаблона */}
+        {focusBeat && (
+          <BeatEditor
+            b={focusBeat}
+            v={resolveBeat(focusBeat)}
+            e={edits[focusBeat.path] ?? {}}
+            onEdit={editBeat}
+            isFl={isFl}
+          />
+        )}
+
+        </div>
+        </div>
+
+        </>)}
+
+        {/* ── Общее для всех ────────────────────────────────────────────── */}
+        {(!isBatch || tab === "shared") && (<>
+
+        {/* Ник продюсера: подставляется как {nick} и вычищается из {name} */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <span style={labelStyle}>{t.player.ytNickname}</span>
+          <input
+            value={nick}
+            onChange={(e) => setNick(e.target.value)}
+            placeholder={t.player.ytNicknamePlaceholder}
+            style={inputStyle}
+            spellCheck={false}
+          />
+          <span style={{ fontSize: 11, color: isFl ? "var(--ink-dim)" : "var(--text-faint)" }}>{t.player.ytNicknameHint}</span>
+        </div>
+
+        {/* Текст на кадре и шрифт: общие — вшиваются во все видео пачки */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <span style={labelStyle}>{t.player.ytOverlaySection}</span>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, cursor: "pointer", color: isFl ? "var(--ink-dim)" : "var(--text-muted)" }}>
+            <input type="checkbox" checked={overlay} onChange={(e) => setOverlay(e.target.checked)} />
+            {t.player.ytOverlayToggle}
+          </label>
+          {overlay && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ ...labelStyle, flexShrink: 0 }}>{t.player.ytFont}</span>
+              <select
+                value={font}
+                onChange={(e) => setFont(e.target.value)}
+                style={{ ...inputStyle, cursor: "pointer", fontFamily: cssFontFor(font) }}
+              >
+                {YT_FONTS.map((f) => (
+                  <option key={f.key} value={f.key} style={{ fontFamily: f.css }}>{f.label}</option>
+                ))}
+                {/* Свои шрифты: гарнитуру в списке не показать (файл не загружен
+                    в вебвью), но её сразу видно на кадре превью. */}
+                {customFonts.map((p) => (
+                  <option key={p} value={p}>{fontLabel(p)}</option>
+                ))}
+              </select>
+              <button onClick={() => void addFonts()} style={{ ...chromeBtn, flexShrink: 0 }} title={t.player.ytFontAdd}>
+                <Icons.Plus width={12} height={12} />
+                {t.player.ytFontAdd}
+              </button>
+              {isCustomFont(font) && (
+                <button onClick={() => void removeFont(font)} style={{ ...chromeBtn, flexShrink: 0 }} title={t.player.ytFontRemove}>
+                  <Icons.X width={12} height={12} />
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Шаблон названия: пресеты + редактируемое поле */}
@@ -2013,56 +2572,52 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
           </div>
         </div>
 
-        {/* Список битов: превью названий / статусы загрузки */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={labelStyle}>{t.player.ytPreview}</span>
-          <div style={{ maxHeight: 180, overflowY: "auto", border: `1px solid ${isFl ? "var(--line-work)" : "var(--border)"}`, borderRadius: 7, background: isFl ? "var(--work-2)" : "transparent" }}>
-            {beats.map((b) => {
-              const st = statusFor(b.path);
-              return (
-                <div key={b.path} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderBottom: `1px solid ${isFl ? "var(--line-work)" : "var(--border)"}`, fontSize: 12 }}>
-                  <span style={{ flex: 1, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis", color: isFl ? "var(--ink-on-work)" : "var(--text-body)" }}>
-                    {renderYtTemplate(tpl, b, nick, beatAuthors(b, nick, aliases, extras))}
-                  </span>
-                  {st.text && (
-                    <span style={{ flexShrink: 0, fontFamily: "var(--font-mono)", fontSize: 11, color: st.failed ? "var(--rec, #ff453a)" : st.url ? "var(--positive, #46d46a)" : (isFl ? "var(--ink-dim)" : "var(--text-faint)") }}>
-                      {st.text}
-                    </span>
-                  )}
-                  {st.url && (
-                    <button onClick={() => openExternal(st.url!)} style={{ ...chromeBtn, height: 24, padding: "0 8px", fontSize: 11, flexShrink: 0 }}>
-                      {t.player.ytOpen}
-                    </button>
-                  )}
-                </div>
-              );
-            })}
+        {/* Одиночное видео: статус загрузки — списка слева у него нет */}
+        {!isBatch && focusBeat && statusFor(focusBeat.path).text && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: statusFor(focusBeat.path).failed ? "var(--rec, #ff453a)" : (isFl ? "var(--ink-dim)" : "var(--text-faint)") }}>
+              {statusFor(focusBeat.path).text}
+            </span>
+            {statusFor(focusBeat.path).url && (
+              <button onClick={() => openExternal(statusFor(focusBeat.path).url!)} style={{ ...chromeBtn, height: 24, padding: "0 8px", fontSize: 11 }}>
+                {t.player.ytOpen}
+              </button>
+            )}
+          </div>
+        )}
+
+        </>)}
+
+            </div>
           </div>
         </div>
 
-        {err && (
-          <span style={{ fontSize: 12, color: "var(--rec, #ff453a)" }}>{err}</span>
-        )}
-
-        {/* Действия */}
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-          <button onClick={onClose} style={chromeBtn}>{t.player.ytClose}</button>
-          {!allDone && (
-            <button
-              onClick={start}
-              disabled={started}
-              style={{
-                ...chromeBtn,
-                opacity: started ? 0.55 : 1,
-                background: isFl ? "linear-gradient(var(--accent), var(--accent-deep, #e8651e))" : "var(--accent)",
-                border: isFl ? "1px solid var(--chrome-lo)" : "1px solid var(--accent)",
-                color: "#fff",
-              }}
-            >
-              <Icons.Yt width={13} height={13} />
-              {t.player.ytStart}
-            </button>
-          )}
+        {/* Подвал: статус окружения слева, действия справа */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", borderTop: `1px solid ${isFl ? "var(--line-work)" : "var(--border)"}`, flexShrink: 0 }}>
+          <span style={{ fontSize: 11, color: isFl ? "var(--ink-dim)" : "var(--text-faint)", overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
+            {err
+              ? <span style={{ color: "var(--rec, #ff453a)" }}>{err}</span>
+              : `${ytOk ? t.player.ytFootChannelOk : t.player.ytFootChannelOff} · ${ffmpegOk === false ? t.player.ytFootFfmpegOff : t.player.ytFootFfmpegOk}`}
+          </span>
+          <div style={{ marginLeft: "auto", display: "flex", gap: 10, flexShrink: 0 }}>
+            <button onClick={onClose} style={chromeBtn}>{t.player.ytClose}</button>
+            {!allDone && (
+              <button
+                onClick={start}
+                disabled={started}
+                style={{
+                  ...chromeBtn,
+                  opacity: started ? 0.55 : 1,
+                  background: isFl ? "linear-gradient(var(--accent), var(--accent-deep, #e8651e))" : "var(--accent)",
+                  border: isFl ? "1px solid var(--chrome-lo)" : "1px solid var(--accent)",
+                  color: "#fff",
+                }}
+              >
+                <Icons.Yt width={13} height={13} />
+                {t.player.ytStart}
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
