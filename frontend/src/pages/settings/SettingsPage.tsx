@@ -320,9 +320,12 @@ export function SettingsPage() {
 
         <Field label={t.settings.ytFfmpegPath}>
           <MonoInput value={s.ffmpegPath} onCommit={(v) => patch({ ffmpegPath: v })} placeholder="C:\ffmpeg\bin\ffmpeg.exe" />
-          <span style={{ fontSize: "var(--fs-sm)", fontFamily: "var(--font-mono)", color: ffmpegInfo?.found ? "var(--positive)" : "var(--danger)" }}>
-            {ffmpegInfo == null ? "…" : ffmpegInfo.found ? `${t.settings.ytFfmpegOk} ${ffmpegInfo.path}` : t.settings.ytFfmpegMissing}
-          </span>
+          {/* Только ошибки: когда ffmpeg на месте — ничего не показываем. */}
+          {ffmpegInfo != null && !ffmpegInfo.found && (
+            <span style={{ fontSize: "var(--fs-sm)", fontFamily: "var(--font-mono)", color: "var(--danger)" }}>
+              {t.settings.ytFfmpegMissing}
+            </span>
+          )}
           {ffmpegInfo != null && !ffmpegInfo.found && (
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
               <span style={{ fontSize: "var(--fs-sm)", color: "var(--text-faint)", lineHeight: 1.5, maxWidth: 560 }}>

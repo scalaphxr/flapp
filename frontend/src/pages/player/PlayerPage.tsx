@@ -2678,10 +2678,11 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
 
         {/* Подвал: статус окружения слева, действия справа */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", borderTop: `1px solid ${isFl ? "var(--line-work)" : "var(--border)"}`, flexShrink: 0 }}>
-          <span style={{ fontSize: 11, color: isFl ? "var(--ink-dim)" : "var(--text-faint)", overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
+          <span style={{ fontSize: 11, color: "var(--rec, #ff453a)", overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
+            {/* Только ошибки: молчим, когда всё в порядке. Никаких «ffmpeg найден». */}
             {err
-              ? <span style={{ color: "var(--rec, #ff453a)" }}>{err}</span>
-              : `${ytOk ? t.player.ytFootChannelOk : t.player.ytFootChannelOff} · ${ffmpegOk === false ? t.player.ytFootFfmpegOff : t.player.ytFootFfmpegOk}`}
+              ? err
+              : [!ytOk ? t.player.ytFootChannelOff : "", ffmpegOk === false ? t.player.ytFootFfmpegOff : ""].filter(Boolean).join(" · ")}
           </span>
           <div style={{ marginLeft: "auto", display: "flex", gap: 10, flexShrink: 0 }}>
             <button onClick={onClose} style={chromeBtn}>{t.player.ytClose}</button>
