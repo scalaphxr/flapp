@@ -1201,6 +1201,28 @@ function renderYtTemplate(tpl: string, b: YtBeat, nick: string, authors: string[
   return s.trim() || beatTitleFromStem(stem, b.bpm).title;
 }
 
+/** Референс-шаблон описания в стиле тайп-бит канала: инфо-блок → разделитель
+ * IGNORE → авто-стена {keywords} → строка {hashtags}. Всегда доступен в
+ * выпадашке пресетов, чтобы существующие пользователи (у кого сохранён старый
+ * шаблон) могли переключиться на новый одним кликом, не теряя свой. Совпадает с
+ * defaultDescription в settings.go. */
+const REFERENCE_DESC = `{type} Type Beat "{name}"
+
+• BPM: {bpm}  |  Key: {key}
+• Prod. {nick} — leave a like if you enjoyed 💯🤝
+• Email for WAV / exclusive: your@email.com
+
+[FREE] for non-profit use — you MUST credit (prod. {nick}) in your title.
+For profit / exclusive rights: contact me.
+Unauthorized use (no lease/exclusive rights) is copyright infringement, subject to DMCA takedown.
+
+IGNORE ↓
+________________________________________
+
+{keywords}
+
+{hashtags}`;
+
 /** Ручная правка одного видео пачки. Незаданное поле наследуется из шаблона —
  * так правка шаблона не затирает то, что уже поправили руками. */
 type BeatEdit = { title?: string; desc?: string; tags?: string; privacy?: string };
@@ -1932,7 +1954,11 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
   }
 
   // Пресеты описаний — та же механика, что у шаблонов названия.
-  const descPresets = settings?.ytDescTemplates ?? [];
+  // Референс-шаблон всегда доступен в выпадашке (не затирая активное описание).
+  const descPresets = React.useMemo(() => {
+    const saved = settings?.ytDescTemplates ?? [];
+    return saved.includes(REFERENCE_DESC) ? saved : [...saved, REFERENCE_DESC];
+  }, [settings?.ytDescTemplates]);
   const descSaved = descPresets.includes(desc.trim());
 
   function saveDescPreset() {
@@ -2540,7 +2566,9 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
             >
               {!descSaved && <option value="">{t.player.ytTplCustom}</option>}
               {descPresets.map((p) => (
-                <option key={p} value={p}>{p.split("\n")[0].slice(0, 80) || "…"}</option>
+                <option key={p} value={p}>
+                  {(p.split("\n")[0].slice(0, 70) || "…") + (p.includes("{keywords}") ? " — SEO" : "")}
+                </option>
               ))}
             </select>
           )}
