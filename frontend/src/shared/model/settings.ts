@@ -36,6 +36,7 @@ const fallback: Settings = {
   ytNickname: "",
   ytNoTextOverlay: false,
   ytFont: "",
+  ytCustomFonts: [],
   ytAuthorAliases: {},
   ytDefaultImage: "",
   ytTitleTemplate: '[FREE] {type} Type Beat "{name}" | {bpm} BPM {key}',
@@ -49,6 +50,8 @@ const fallback: Settings = {
   ytDescTemplates: [],
   ytTags: "type beat, instrumental, beat, free type beat",
   ytPrivacy: "public",
+  ytKeywordRoster: "",
+  ytRosterAutoGrow: true,
 };
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({

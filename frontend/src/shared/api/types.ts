@@ -245,6 +245,7 @@ export interface Settings {
   ytNickname: string; // ник/тег продюсера: {nick} + вычищается из {name}
   ytNoTextOverlay: boolean; // инвертирован: false = вшивать название+ник в кадр
   ytFont: string; // шрифт наложения: ключ (arial, impact…) или путь к .ttf
+  ytCustomFonts: string[]; // свои шрифты: абсолютные пути к .ttf/.otf
   ytAuthorAliases: Record<string, string>; // память правок авторов: токен → имя ("" = не автор)
   ytDefaultImage: string; // обложка по умолчанию
   ytTitleTemplate: string; // активный шаблон: {name} {type} {bpm} {key} {nick}
@@ -253,6 +254,8 @@ export interface Settings {
   ytDescTemplates: string[]; // сохранённые пресеты описаний
   ytTags: string; // через запятую
   ytPrivacy: string; // public | unlisted | private
+  ytKeywordRoster: string; // пул ключевиков для {keywords}, через запятую/перенос
+  ytRosterAutoGrow: boolean; // пополнять ростер артистами опубликованных битов
 }
 
 // YtStatus mirrors GET /api/youtube/status.
