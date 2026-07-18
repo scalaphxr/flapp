@@ -1648,6 +1648,16 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
     () => (focusBeat ? beatAuthors(focusBeat, nick, aliases, extras[focusBeat.path] ?? []) : []),
     [focusBeat, nick, aliases, extras],
   );
+
+  // Живое превью развёрнутых {keywords}/{hashtags} для сфокусированного бита —
+  // чтобы видеть стену тегов до публикации. Тип-артисты — без своего ника.
+  const kwPreview = React.useMemo(() => {
+    if (!focusBeat) return { keywords: "", hashtags: "" };
+    const nlc = nick.trim().toLowerCase();
+    const ta = beatAuthors(focusBeat, nick, aliases, extras[focusBeat.path] ?? [])
+      .filter((a) => a.trim().toLowerCase() !== nlc);
+    return { keywords: buildKeywords(ta, roster, new Date().getFullYear()), hashtags: buildHashtags(ta) };
+  }, [focusBeat, nick, aliases, extras, roster]);
   // Чипсы = распознанные соавторы (без своего ника) + ручные добавления. У
   // каждого чипа source = исходный токен из имени (для записи правки в алиасы)
   // или null для добавленного вручную.
@@ -1994,7 +2004,7 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
     setStarted(true);
     // Значения формы становятся дефолтами следующей загрузки. В пачке единую
     // обложку не трогаем (у каждого бита своя) — сохраняем прежний дефолт.
-    void updateSettings({ ytDefaultImage: image || (settings?.ytDefaultImage ?? ""), ytNickname: nick, ytNoTextOverlay: !overlay, ytFont: font, ytAuthorAliases: aliases, ytTitleTemplate: tpl, ytDescription: desc, ytTags: tags, ytPrivacy: privacy });
+    void updateSettings({ ytDefaultImage: image || (settings?.ytDefaultImage ?? ""), ytNickname: nick, ytNoTextOverlay: !overlay, ytFont: font, ytAuthorAliases: aliases, ytTitleTemplate: tpl, ytDescription: desc, ytTags: tags, ytPrivacy: privacy, ytKeywordRoster: roster, ytRosterAutoGrow: rosterAutoGrow });
     const map: Record<string, string> = {};
     for (const b of beats) {
       try {
@@ -2026,6 +2036,22 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
         map[b.path] = "";
       }
       setJobMap({ ...map });
+    }
+    // Авторост ростера: артисты успешно поставленных в очередь битов пополняют
+    // пул для будущих видео. Артисты текущей пачки и так во фронт-слайсе.
+    if (rosterAutoGrow) {
+      const nlc = nick.trim().toLowerCase();
+      let grown = roster;
+      for (const b of beats) {
+        if (!map[b.path]) continue; // не ушёл в загрузку
+        const ta = beatAuthors(b, nick, aliases, extras[b.path] ?? [])
+          .filter((a) => a.trim().toLowerCase() !== nlc);
+        grown = mergeRoster(grown, ta);
+      }
+      if (grown !== roster) {
+        setRoster(grown);
+        void updateSettings({ ytKeywordRoster: grown });
+      }
     }
   }
 
@@ -2569,6 +2595,30 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
               <option value="unlisted">{t.player.ytPrivacyUnlisted}</option>
               <option value="private">{t.player.ytPrivacyPrivate}</option>
             </select>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 12 }}>
+          <span style={labelStyle}>{t.player.ytKeywordsSection}</span>
+          <label style={{ fontSize: 12, color: "var(--text-faint)" }}>{t.player.ytRosterLabel}</label>
+          <textarea
+            value={roster}
+            onChange={(e) => setRoster(e.target.value)}
+            placeholder={t.player.ytRosterHint}
+            spellCheck={false}
+            style={{ ...inputStyle, minHeight: 90, resize: "vertical", fontFamily: "var(--font-mono)", fontSize: 12 }}
+          />
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, cursor: "pointer" }}>
+            <input type="checkbox" checked={rosterAutoGrow} onChange={(e) => setRosterAutoGrow(e.target.checked)} />
+            {t.player.ytRosterAutoGrow}
+          </label>
+          <label style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 4 }}>{t.player.ytKeywordsPreview}</label>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-faint)", maxHeight: 90, overflowY: "auto", whiteSpace: "pre-wrap", wordBreak: "break-word", border: "1px solid var(--stroke, #333)", borderRadius: 4, padding: 6 }}>
+            {kwPreview.keywords || "—"}
+          </div>
+          <label style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 4 }}>{t.player.ytHashtagsPreview}</label>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--accent, #4ea1ff)", wordBreak: "break-word" }}>
+            {kwPreview.hashtags || "—"}
           </div>
         </div>
 
