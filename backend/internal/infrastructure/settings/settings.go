@@ -33,6 +33,10 @@ type Settings struct {
 	YtNickname      string `json:"ytNickname"`      // ник/тег продюсера: подставляется как {nick} и вычищается из {name}
 	YtNoTextOverlay bool   `json:"ytNoTextOverlay"` // инвертирован: false = вшивать текст (название+ник) в кадр (вкл по умолчанию)
 	YtFont          string `json:"ytFont"`          // шрифт наложения: ключ (arial, impact…) или путь к .ttf; "" = дефолт
+	// Свои шрифты для наложения: абсолютные пути к .ttf/.otf, добавленные
+	// пользователем. Показываются в списке после системных; выбранный попадает
+	// в YtFont как путь.
+	YtCustomFonts []string `json:"ytCustomFonts"`
 	// Память правок распознавания авторов: токен(lowercase) → каноничное имя;
 	// пустая строка = «это не автор». Парсинг на фронте, бэкенд только хранит.
 	YtAuthorAliases map[string]string `json:"ytAuthorAliases"`
@@ -45,6 +49,10 @@ type Settings struct {
 	YtDescTemplates []string `json:"ytDescTemplates"`
 	YtTags          string   `json:"ytTags"`    // теги по умолчанию, через запятую
 	YtPrivacy       string   `json:"ytPrivacy"` // public | unlisted | private
+	// Пул ключевиков для подстановки {keywords} в описании (через запятую/перенос)
+	// и флаг его авто-пополнения артистами опубликованных битов.
+	YtKeywordRoster  string `json:"ytKeywordRoster"`
+	YtRosterAutoGrow bool   `json:"ytRosterAutoGrow"`
 }
 
 // Defaults returns the baseline configuration.
@@ -72,8 +80,10 @@ func Defaults() Settings {
 		YtDescTemplates: []string{
 			defaultDescription,
 		},
-		YtTags:    "type beat, instrumental, beat, free type beat",
-		YtPrivacy: "public",
+		YtTags:           "type beat, instrumental, beat, free type beat",
+		YtPrivacy:        "public",
+		YtKeywordRoster:  "",
+		YtRosterAutoGrow: true,
 	}
 }
 
@@ -81,14 +91,20 @@ func Defaults() Settings {
 // что и в названии, плюс {nick} — тег продюсера из настроек.
 const defaultDescription = `{type} Type Beat "{name}"
 
-Prod. {nick}
-{bpm} BPM | Key: {key}
+• BPM: {bpm}  |  Key: {key}
+• Prod. {nick} — leave a like if you enjoyed 💯🤝
+• Email for WAV / exclusive: your@email.com
 
-Free for non-profit use only — you MUST credit (prod. {nick}) in your title.
-For profit use / exclusive rights: contact me.
+[FREE] for non-profit use — you MUST credit (prod. {nick}) in your title.
+For profit / exclusive rights: contact me.
+Unauthorized use (no lease/exclusive rights) is copyright infringement, subject to DMCA takedown.
 
-{type} type beat, {name} type beat, {bpm} bpm, {key}
-#typebeat #{nick}`
+IGNORE ↓
+________________________________________
+
+{keywords}
+
+{hashtags}`
 
 // Store reads and writes the settings file under a mutex.
 type Store struct {
