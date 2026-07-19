@@ -39,12 +39,13 @@ const noRoster = buildKeywords(["Gunna"], "", 2026).split(", ");
 eq(noRoster[0], "gunna type beat", "keywords work with empty roster");
 eq(noRoster.includes("instrumental"), true, "keywords evergreen with empty roster");
 
-// buildHashtags: CamelCase #ArtistTypeBeat, alnum only, dedup, cap 15
+// buildHashtags: CamelCase #ArtistTypeBeat, alnum only, dedup, cap 5 (2026:
+// YouTube прячет описания с >5 хэштегов как спам, поэтому режем жёстко).
 eq(buildHashtags(["bankroll fresh", "MexikoDro", "warhol.ss"]),
    "#BankrollFreshTypeBeat #MexikodroTypeBeat #WarholSsTypeBeat", "hashtags camelcase");
 eq(buildHashtags(["jeezy", "Jeezy"]), "#JeezyTypeBeat", "hashtags dedup ci");
-eq(buildHashtags(Array.from({ length: 30 }, (_, i) => `a${i}`)).split(" ").length, 15,
-   "hashtags cap 15");
+eq(buildHashtags(Array.from({ length: 30 }, (_, i) => `a${i}`)).split(" ").length, 5,
+   "hashtags cap 5");
 
 // mergeRoster: append bare + "{artist} type beat" for new artists only
 eq(mergeRoster("jeezy", ["Bankroll Fresh", "jeezy"]),

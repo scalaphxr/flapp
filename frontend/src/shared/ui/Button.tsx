@@ -58,10 +58,10 @@ export function Button({
   const [active, setActive] = React.useState(false);
 
   const hoverFx: Record<Variant, React.CSSProperties> = {
-    primary: { filter: "brightness(1.08)" },
-    secondary: { filter: "brightness(1.05)" },
-    ghost: { background: "var(--surface-3)", color: "var(--text-body)" },
-    danger: { background: "color-mix(in srgb, var(--danger) 12%, transparent)" },
+    primary: { background: "var(--accent-hover)" },
+    secondary: { background: "var(--surface-3)", borderColor: "var(--border-strong)" },
+    ghost: { background: "var(--surface-3)", color: "var(--text-strong)" },
+    danger: { background: "color-mix(in srgb, var(--danger) 14%, transparent)" },
   };
   const appliedHover = !disabled && hover ? hoverFx[variant] : {};
   const appliedActive = !disabled && active ? { transform: "scale(0.97)" } : {};

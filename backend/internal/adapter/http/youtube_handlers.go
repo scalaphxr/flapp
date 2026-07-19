@@ -136,3 +136,24 @@ func (s *Server) handleYouTubePreview(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"path": path})
 }
+
+// handleYouTubePreviewFrame renders one PNG through the same filtergraph as the
+// final video and returns its local path. Аудио не нужно — кадр показываем ещё
+// до выбора трека.
+func (s *Server) handleYouTubePreviewFrame(w http.ResponseWriter, r *http.Request) {
+	var req usecase.YouTubeUploadRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, domain.ErrInvalidInput)
+		return
+	}
+	if req.ImagePath == "" {
+		writeError(w, domain.ErrInvalidInput)
+		return
+	}
+	path, err := s.svc.YouTube.PreviewFrame(r.Context(), req)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"path": path})
+}

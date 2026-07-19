@@ -43,19 +43,20 @@ export function groupColor(group: ColorGroup): { color: string; bg: string } {
   };
 }
 
+// Dimmed Terminal-Core palette — держать в синхроне с --cat-* в tokens.css.
 export const GROUP_HEX: Record<ColorGroup, string> = {
-  "808":      "#D98C6A",
-  kick:       "#E0926A",
-  snare:      "#E0A455",
-  clap:       "#D98E8E",
-  hihat:      "#C7B36A",
-  openhat:    "#B6B97A",
-  perc:       "#A8B27A",
-  vox:        "#C79BC4",
-  fx:         "#C98BA8",
-  loop:       "#8F7CF8",
-  drumloop:   "#C9A06A",
-  unsorted:   "#998C7C",
+  "808":      "#C77B5A",
+  kick:       "#C9915C",
+  snare:      "#C47385",
+  clap:       "#BB7E9E",
+  hihat:      "#6FB3A6",
+  openhat:    "#6FA3B8",
+  perc:       "#7E90B5",
+  vox:        "#A585B8",
+  fx:         "#B87FA8",
+  loop:       "#8985B0",
+  drumloop:   "#C2A15E",
+  unsorted:   "#7A7A7A",
 };
 
 export function groupHex(group: ColorGroup): string {

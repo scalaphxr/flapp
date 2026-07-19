@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"net/http"
+	"net/http/cookiejar"
 	"time"
 
 	"github.com/flapp/core/internal/infrastructure/covers"
@@ -18,9 +19,12 @@ type CoverService struct {
 }
 
 // NewCoverService wires the service with its own short-timeout HTTP client.
+// Клиенту нужен cookie-jar: covers.Search держит в нём прогретую сессию
+// Pinterest (csrftoken) между бутстрапом и запросами поиска.
 func NewCoverService(dir string) *CoverService {
+	jar, _ := cookiejar.New(nil) // ошибки нет: nil-опции всегда валидны
 	return &CoverService{
-		HTTP: &http.Client{Timeout: 20 * time.Second},
+		HTTP: &http.Client{Timeout: 20 * time.Second, Jar: jar},
 		Dir:  dir,
 	}
 }

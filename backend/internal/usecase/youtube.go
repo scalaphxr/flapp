@@ -170,3 +170,47 @@ func (s *YouTubeService) Preview(ctx context.Context, req YouTubeUploadRequest) 
 	}
 	return out, nil
 }
+
+// PreviewFrame renders a single PNG through the same filtergraph as the final
+// video, чтобы статичное превью в UI совпадало с итоговым кадром. Аудио не
+// требуется: кадр показываем ещё до выбора трека.
+//
+// Имя файла несёт счётчик: WebView кэширует картинку по URL, и без уникального
+// имени превью не обновлялось бы при правке текста.
+func (s *YouTubeService) PreviewFrame(ctx context.Context, req YouTubeUploadRequest) (string, error) {
+	if req.ImagePath == "" {
+		return "", domain.ErrInvalidInput
+	}
+	if st, err := os.Stat(req.ImagePath); err != nil || st.IsDir() {
+		return "", fmt.Errorf("file not found: %s", req.ImagePath)
+	}
+	ffmpeg, err := s.FFmpegPath()
+	if err != nil {
+		return "", err
+	}
+	out := filepath.Join(s.TempDir, fmt.Sprintf("yt_frame_%d.png", time.Now().UnixNano()))
+	if err := youtube.RenderFrame(ctx, ffmpeg, req.ImagePath, out, youtube.RenderOpts{
+		Overlay:   req.Overlay,
+		TitleText: req.OverlayTitle,
+		SubText:   req.OverlaySub,
+		Font:      req.OverlayFont,
+	}); err != nil {
+		return "", err
+	}
+	s.sweepFrames(out)
+	return out, nil
+}
+
+// sweepFrames removes previously rendered preview frames, оставляя только
+// текущий: за сессию их набегает по одному на каждую правку текста.
+func (s *YouTubeService) sweepFrames(keep string) {
+	matches, err := filepath.Glob(filepath.Join(s.TempDir, "yt_frame_*.png"))
+	if err != nil {
+		return
+	}
+	for _, p := range matches {
+		if p != keep {
+			os.Remove(p)
+		}
+	}
+}

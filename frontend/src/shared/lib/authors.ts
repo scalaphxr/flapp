@@ -1,75 +1,99 @@
-// Парсер авторов бита из имени файла. Продюсеры уже указаны в имени, но у всех
-// разные форматы — поэтому это эвристика по нескольким сигналам, а не жёсткий
-// шаблон. Промахи закрываются редактируемыми чипсами + картой псевдонимов в UI.
+// Парсер авторов бита из имени файла. Продюсеры уже в имени, но форматы у всех
+// разные — поэтому эвристика по сигналам, а не жёсткий шаблон. Промахи
+// закрываются редактируемыми чипсами + картой псевдонимов в UI.
 //
-// Сигналы (по надёжности): @-хендлы → группы, склеенные `+ & x` → токены-хвост
-// после BPM. Имя бита (до BPM) в авторы не идёт; ведущий 4-значный индекс,
-// шум-слова (bpm/prod/type…), тональности и числа отбрасываются.
+// Модель: находим BPM и режем имя на «до» и «после». Авторы — это:
+//   • @-хендлы где угодно (снимаем @, цифры в нике сохраняем);
+//   • группы, склеенные коннектором `+ & x`, в части ДО BPM (KOLALOI+WSB+TAINIY);
+//   • регион ПОСЛЕ BPM: если есть коннектор — режем по нему (сегмент может быть
+//     из нескольких слов = один человек, «Michael Makho»); если коннектора нет —
+//     по пробелам (каждое слово — автор). Плейн-слова ДО BPM — это название,
+//     в авторы не идут. Если BPM в самом начале, после него стоит имя — тогда
+//     из региона берём только коннектор-сегменты, а голые слова игнорируем.
 
 export interface ParseAuthorsOpts {
-  /** Свой ник из настроек: всегда попадает в список и ставится первым. */
+  /** Свой ник из настроек: всегда в списке и первым. */
   nick?: string;
   /** Карта правок: токен(lowercase) → каноничное имя; пустая строка = «не автор». */
   aliases?: Record<string, string>;
-  /** BPM из анализа — приоритетный якорь для поиска числа темпа. */
+  /** BPM из анализа — приоритетный якорь для поиска темпа. */
   bpm?: number;
 }
 
 const NOISE = new Set([
   "bpm", "prod", "p", "type", "beat", "beats", "free", "exclusive", "feat", "ft",
   "mix", "master", "mastered", "remix", "wav", "mp3", "instrumental", "inst",
-  "x", "min", "max", "maj", "minor", "major", "key",
+  "loop", "x", "min", "max", "maj", "minor", "major", "key",
 ]);
 
 const lc = (s: string) => s.toLowerCase();
 
-/** Похоже на обозначение тональности: A, F#, Bmin, Amaj, Gm… (не ник). */
+/** Похоже на тональность: A, F#, Bmin, Amaj, G#Min… (не ник). */
 function isKey(t: string): boolean {
   return /^[a-g](#|b)?(m|min|maj|minor|major|maj7|m7)?$/i.test(t) && t.length <= 6;
 }
 
+/** Токен-мусор: слишком короткий, шум-слово, тональность, число или частота. */
 function isNoise(t: string): boolean {
-  return t.length < 2 || NOISE.has(t) || isKey(t) || /^\d+$/.test(t);
-}
-
-/** Токены имени без разделителей: любой не-буквенно-цифровой символ = граница,
- * плюс расклейка границ цифра↔буква (success135nsm → success 135 nsm). */
-function tokenize(stem: string): string[] {
-  const s = stem
-    .replace(/([a-zA-Z])([0-9])/g, "$1 $2")
-    .replace(/([0-9])([a-zA-Z])/g, "$1 $2")
-    .replace(/[^\p{L}\p{N}]+/gu, " ");
-  return s.split(/\s+/).filter(Boolean);
+  return t.length < 2 || NOISE.has(t) || isKey(t) || /^\d+$/.test(t) || /^\d{2,4}hz$/.test(t);
 }
 
 // Коннектор соавторов: `+`, `&` или отдельно стоящий ` x `.
 const CONNECTOR = /\s*[+&]\s*|\s+x\s+/gi;
+const hasConnector = (s: string) => /\s*[+&]\s*|\s+x\s+/i.test(s);
 
-/** Авторы из групп, склеенных явными коннекторами (KOLALOI+WSB+TAINIY,
- * «@a + @b») — сильный сигнал независимо от позиции в имени. */
-function connectorAuthors(stem: string): string[] {
-  const tok = "[@\\p{L}\\p{N}_]+";
+/** Авторы из групп, склеенных коннектором, в куске ДО BPM (KOLALOI+WSB+TAINIY).
+ * Здесь сегменты обычно однословные, поэтому режем по коннектору на слова. */
+function connectorAuthors(part: string): string[] {
+  const tok = "[\\p{L}\\p{N}_]+";
   const conn = "(?:\\s*[+&]\\s*|\\s+x\\s+)";
   const group = new RegExp(`${tok}${conn}${tok}(?:${conn}${tok})*`, "giu");
   const out: string[] = [];
-  for (const m of stem.matchAll(group)) {
-    for (const part of m[0].split(CONNECTOR)) {
-      const t = lc(part.replace(/^@/, "").trim());
+  for (const m of part.matchAll(group)) {
+    for (const seg of m[0].split(CONNECTOR)) {
+      const t = lc(seg.trim());
       if (t) out.push(t);
     }
   }
   return out;
 }
 
-/** Индекс токена-BPM: сперва совпадение с проанализированным темпом, иначе
- * первое отдельное 2–3-значное число 40–260 (ведущий 4-значный индекс — мимо). */
-function findBpmIndex(tokens: string[], bpm?: number): number {
-  if (bpm && bpm > 0) {
-    const r = String(Math.round(bpm));
-    const i = tokens.indexOf(r);
-    if (i >= 0) return i;
+/** Делит имя на части «до BPM» и «после BPM». Приоритет якоря: `NNNbpm` →
+ * `(NNN)` → значение из анализа → первое отдельное 2–3-значное число 40–260
+ * (не 4-значный индекс, не частота `NNNhz`). */
+function splitAtBpm(s: string, bpm?: number): { before: string; after: string } {
+  let m: RegExpMatchArray | null = s.match(/(\d{2,3})\s*bpm\b/i);
+  if (!m) m = s.match(/\((\d{2,3})\)/);
+  if (!m && bpm && bpm > 0) m = s.match(new RegExp(`(?<!\\d)${Math.round(bpm)}(?!\\d)`));
+  if (!m) {
+    for (const cand of s.matchAll(/(?<!\d)(\d{2,3})(?!\d)/g)) {
+      const v = +cand[1];
+      if (v >= 40 && v <= 260 && !/^\s*hz\b/i.test(s.slice((cand.index ?? 0) + cand[1].length))) {
+        m = cand as RegExpMatchArray;
+        break;
+      }
+    }
   }
-  return tokens.findIndex((t) => /^\d{2,3}$/.test(t) && +t >= 40 && +t <= 260);
+  if (!m || m.index == null) return { before: s, after: "" };
+  return { before: s.slice(0, m.index), after: s.slice(m.index + m[0].length) };
+}
+
+/** Авторы из региона ПОСЛЕ BPM. plainWords=false (BPM в самом начале → дальше
+ * имя) отключает разбор голых слов, оставляя только коннектор-сегменты. */
+function regionAuthors(after: string, plainWords: boolean): string[] {
+  let s = ` ${after} `;
+  s = s.replace(/\[[^\]]*\]/g, " ");          // [loop], [BR Glo]
+  s = s.replace(/\b(?:bpm|loop)\b/gi, " ");    // метки
+  s = s.replace(/\b\d{2,4}hz\b/gi, " ");       // 494hz
+  // ведущая тональность (F#min, Emin, fmin, Bm, G#Min…)
+  s = s.replace(/^\s*[a-g](?:#|b)?\s?(?:m|min|maj|minor|major)?(?=\s|$)/i, " ");
+  s = s.trim();
+  if (!s) return [];
+  if (hasConnector(s)) {
+    return s.split(CONNECTOR).map((seg) => lc(seg.trim())).filter((seg) => seg && !isNoise(seg));
+  }
+  if (!plainWords) return [];
+  return s.split(/[^\p{L}\p{N}#]+/u).map(lc).filter((w) => w && !isNoise(w));
 }
 
 /** Распознаёт всех авторов бита. Возвращает упорядоченный список без повторов;
@@ -78,26 +102,18 @@ export function parseAuthors(stem: string, opts: ParseAuthorsOpts = {}): string[
   const { nick = "", aliases = {}, bpm } = opts;
 
   const handles = [...stem.matchAll(/@([\p{L}\p{N}_]+)/gu)].map((m) => lc(m[1]));
-  const connectors = connectorAuthors(stem);
-  // Хендлы убираем до токенизации: иначе расклейка цифра↔буква рвёт «@wh1sper»
-  // на «wh 1 sper» и обломки утекают в авторов. Сами хендлы уже сохранены.
-  const stemNoHandles = stem.replace(/@[\p{L}\p{N}_]+/gu, " ");
-  const tokens = tokenize(stemNoHandles);
-  const bpmIdx = findBpmIndex(tokens, bpm);
-  // Токены после BPM = авторы, только если перед BPM есть имя бита. Если BPM в
-  // самом начале (напр. «(167) Space Cadet @nick»), имя стоит ПОСЛЕ — тогда
-  // опираемся лишь на хендлы/коннекторы, а хвост в авторы не тащим.
-  const positional = bpmIdx > 0 ? tokens.slice(bpmIdx + 1).map(lc) : [];
+  const noHandles = stem.replace(/@[\p{L}\p{N}_]+/gu, " ");
 
-  const authorSet = new Set<string>([...handles, ...connectors, ...positional]);
+  const { before, after } = splitAtBpm(noHandles, bpm);
+  const beforeConn = connectorAuthors(before);
+  const trailing = regionAuthors(after, before.trim() !== "");
 
   const ordered: string[] = [];
   const seen = new Set<string>();
   const consider = (raw: string) => {
     const t = lc(raw);
-    if (!authorSet.has(t) || isNoise(t)) return;
-    // Правка пользователя (переименование/удаление) имеет приоритет.
-    let name = Object.prototype.hasOwnProperty.call(aliases, t) ? aliases[t] : t;
+    if (isNoise(t)) return;
+    let name = Object.prototype.hasOwnProperty.call(aliases, t) ? aliases[t] : raw;
     name = name.trim();
     if (!name) return; // алиас на "" = «не автор»
     const key = lc(name);
@@ -105,9 +121,20 @@ export function parseAuthors(stem: string, opts: ParseAuthorsOpts = {}): string[
     seen.add(key);
     ordered.push(name);
   };
-  // Порядок появления в имени + подстраховка для хендлов/коннекторов.
-  for (const tok of tokens) consider(tok);
-  for (const h of [...connectors, ...handles]) consider(h);
+  for (const a of [...beforeConn, ...trailing, ...handles]) consider(a);
+
+  // Fallback: авторы стоят ПЕРЕД именем и отделены от него тире
+  // (whapperx owski - dirty pipe 128). Срабатывает только если надёжные сигналы
+  // ничего не дали — иначе риск принять кусок названия за автора.
+  if (ordered.length === 0) {
+    const segs = before.split(/\s[-–—]\s/).map((x) => x.trim()).filter(Boolean);
+    if (segs.length >= 2) {
+      // Последний сегмент примыкает к BPM — это имя; более ранние — авторы.
+      for (const seg of segs.slice(0, -1)) {
+        for (const w of seg.split(/[^\p{L}\p{N}#]+/u)) consider(w);
+      }
+    }
+  }
 
   const n = nick.trim();
   if (!n) return ordered;

@@ -396,7 +396,7 @@ function MiniRoll({ notes, durationTicks, ticksPerBeat, bpm, playheadSec, totalS
 
   return (
     <div
-      style={{ width: "100%", height: H, borderRadius: 3, overflow: "hidden", cursor: onSeek ? "pointer" : undefined }}
+      style={{ width: "100%", height: H, borderRadius: 0, overflow: "hidden", cursor: onSeek ? "pointer" : undefined }}
       onClick={handleSeek}
     >
       <canvas ref={canvasRef} style={{ display: "block", width: "100%", height: H }} />
@@ -471,7 +471,7 @@ function MidiRow({ clip, cols, rowH, zebra, selected, onToggle, onDownload, onCa
             onSeek={canPlay ? seek : undefined}
           />
         ) : (
-          <div style={{ height: 32, borderRadius: 3, background: "var(--surface-3)", opacity: 0.5 }} />
+          <div style={{ height: 32, borderRadius: 0, background: "var(--surface-3)", opacity: 0.5 }} />
         )}
       </div>
 

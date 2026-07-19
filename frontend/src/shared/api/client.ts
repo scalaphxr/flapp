@@ -234,6 +234,15 @@ export const api = {
     overlaySub?: string;
     overlayFont?: string;
   }) => request<{ path: string }>("/api/youtube/preview", { method: "POST", body: JSON.stringify(body) }),
+  // Рендерит один PNG-кадр тем же фильтром, что и итоговое видео — статичное
+  // превью обложки. Аудио не нужно: кадр рисуется до выбора трека.
+  ytPreviewFrame: (body: {
+    imagePath: string;
+    overlay?: boolean;
+    overlayTitle?: string;
+    overlaySub?: string;
+    overlayFont?: string;
+  }) => request<{ path: string }>("/api/youtube/preview-frame", { method: "POST", body: JSON.stringify(body) }),
   // Автоподбор тегов по тайп-артистам (шаблоны + подсказки поиска YouTube).
   ytTags: (artists: string[]) =>
     request<{ tags: string[] }>(`/api/youtube/tags?artists=${encodeURIComponent(artists.join(","))}`),

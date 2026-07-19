@@ -33,7 +33,7 @@ export function Checkbox({ checked = false, onChange, label, disabled = false, s
           width: 20,
           height: 20,
           flexShrink: 0,
-          borderRadius: "7px",
+          borderRadius: 0,
           display: "inline-flex",
           alignItems: "center",
           justifyContent: "center",

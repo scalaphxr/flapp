@@ -29,7 +29,7 @@ export function ProgressBar({ value = 0, caption, percent = false, style = {} }:
           style={{
             height: "100%",
             width: pct + "%",
-            background: "linear-gradient(90deg, var(--accent) 0%, var(--accent-amber) 100%)",
+            background: "var(--accent)",
             borderRadius: "var(--radius-pill)",
             transition: "width var(--dur-slow) var(--ease-out)",
           }}

@@ -1,57 +1,61 @@
 /* ============================================================
-   TOKENS — Flapp / Console
-   Одна тема. Никаких [data-theme] блоков.
+   TOKENS — Flapp / Terminal-Core
+   Ollama-family: #000 / #fff / mono. Жёсткие края, плоско,
+   поверхности различаются рамкой, а не заливкой. Одна тема.
    ============================================================ */
 
 :root {
-  /* ── Поверхности ── */
-  --bg-base:        #0E0F11;
-  --bg-sunken:      #0A0B0C;
-  --surface-1:      #141619;
-  --surface-2:      #1A1D21;
-  --surface-3:      #22262B;
-  --surface-hover:  #1A1D21;
-  --surface-active: #22262B;
+  /* ── Поверхности. Почти всё — чистый чёрный; разграничение рамкой. ── */
+  --bg-base:        #000000;
+  --bg-sunken:      #000000;
+  --surface-1:      #000000;
+  --surface-2:      #0a0a0a;
+  --surface-3:      #141414;
+  --surface-hover:  #0d0d0d;
+  --surface-active: #1a1a1a;
 
-  /* ── Границы ── */
-  --border-soft:    #22262B;
-  --border-medium:  #2E343A;
-  --border-strong:  #464D55;
+  /* Базовый (непроигранный) цвет волны — заметно светлее панелей, чтобы
+     форма читалась на чёрном; проигранная часть = --accent (белый). */
+  --wave-dim:       #666666;
 
-  /* ── Текст ── */
-  --text-strong:    #E6E9EC;
-  --text-body:      #B4BAC1;
-  --text-muted:     #6E767F;
-  --text-faint:     #464D55;
-  --text-on-accent: #0E0F11;
+  /* ── Границы: единственный способ разделить поверхности. ── */
+  --border-soft:    #262626;
+  --border-medium:  #3a3a3a;
+  --border-strong:  #555555;
 
-  /* ── Сигнал. Сектор круга 55–160° принадлежит системе,
-       ни одна категория сюда не заходит. ── */
-  --accent:         #C8F751;
-  --accent-hover:   #D6FF6B;
-  --accent-press:   #B2DE3F;
-  --accent-soft:    #C8F7511a;
-  --accent-ring:    #C8F75166;
+  /* ── Текст: нейтральный серый, без синевы. ── */
+  --text-strong:    #ffffff;
+  --text-body:      #a3a3a3;
+  --text-muted:     #6b6b6b;
+  --text-faint:     #3d3d3d;
+  --text-on-accent: #000000;
 
-  /* ── Статусы. --warning и --danger делят сектор с Drum Loop и 808:
-       они живут в диалогах и тостах, где категорий не бывает. ── */
-  --positive:       #7BE06A;
-  --warning:        #F5A83C;
-  --danger:         #FF5A4A;
+  /* ── «Акцент» = белый. Активное/выделенное состояние. ── */
+  --accent:         #ffffff;
+  --accent-hover:   #e0e0e0;
+  --accent-press:   #c8c8c8;
+  --accent-soft:    #ffffff14;
+  --accent-ring:    #ffffff;
 
-  /* ── Категории. Соседние разведены минимум на 18°. ── */
-  --cat-808:      #FF6352;  --cat-808-bg:      #FF635224;
-  --cat-kick:     #FF8C45;  --cat-kick-bg:     #FF8C4524;
-  --cat-drumloop: #F5A83C;  --cat-drumloop-bg: #F5A83C24;
-  --cat-hihat:    #35D6BE;  --cat-hihat-bg:    #35D6BE24;
-  --cat-openhat:  #40BCE8;  --cat-openhat-bg:  #40BCE824;
-  --cat-perc:     #5B8FF5;  --cat-perc-bg:     #5B8FF524;
-  --cat-loop:     #8F7CF8;  --cat-loop-bg:     #8F7CF824;
-  --cat-vox:      #C77BF8;  --cat-vox-bg:      #C77BF824;
-  --cat-fx:       #EE6BDB;  --cat-fx-bg:       #EE6BDB24;
-  --cat-clap:     #FF6BB0;  --cat-clap-bg:     #FF6BB024;
-  --cat-snare:    #FF5F80;  --cat-snare-bg:    #FF5F8024;
-  --cat-unsorted: #6E767F;  --cat-unsorted-bg: #6E767F20;
+  /* ── Статусы: приглушённые, живут в диалогах/тостах (без категорий). ── */
+  --positive:       #7FA37A;
+  --warning:        #C2A15E;
+  --danger:         #C77066;
+
+  /* ── Категории: dimmed-палитра, читаемая на чистом чёрном.
+       --cat-*-bg — тот же тон с низкой альфой (подложка по требованию). ── */
+  --cat-808:      #C77B5A;  --cat-808-bg:      #C77B5A1a;
+  --cat-kick:     #C9915C;  --cat-kick-bg:     #C9915C1a;
+  --cat-drumloop: #C2A15E;  --cat-drumloop-bg: #C2A15E1a;
+  --cat-hihat:    #6FB3A6;  --cat-hihat-bg:    #6FB3A61a;
+  --cat-openhat:  #6FA3B8;  --cat-openhat-bg:  #6FA3B81a;
+  --cat-perc:     #7E90B5;  --cat-perc-bg:     #7E90B51a;
+  --cat-loop:     #8985B0;  --cat-loop-bg:     #8985B01a;
+  --cat-vox:      #A585B8;  --cat-vox-bg:      #A585B81a;
+  --cat-fx:       #B87FA8;  --cat-fx-bg:       #B87FA81a;
+  --cat-clap:     #BB7E9E;  --cat-clap-bg:     #BB7E9E1a;
+  --cat-snare:    #C47385;  --cat-snare-bg:    #C473851a;
+  --cat-unsorted: #7A7A7A;  --cat-unsorted-bg: #7A7A7A1a;
 
   /* ── Семантические алиасы ── */
   --text-title:       var(--text-strong);
@@ -62,14 +66,32 @@
   --surface-input:    var(--bg-sunken);
   --surface-well:     var(--bg-sunken);
   --row-hover:        var(--surface-2);
-  --focus-ring:       0 0 0 2px var(--accent-ring);
+  --focus-ring:       0 0 0 1px var(--accent-ring);
 
-  /* ── Тень. Console плоский: тень только у всплывающих поверхностей. ── */
-  --shadow-pop: 0 16px 48px rgba(0, 0, 0, 0.7);
+  /* ── Легаси-алиасы: используются инлайн-стилями (PlayerPage и др.). ── */
+  --border:         var(--border-medium);
+  --accent-softer:  #ffffff0a;
+  --rec:            var(--danger);
 
-  /* ── Шрифты ── */
-  --font-sans: 'Geist', system-ui, sans-serif;
-  --font-mono: 'Geist Mono', ui-monospace, monospace;
+  /* ── Кнопки: primary = инверсия (белый фон / чёрный текст). ── */
+  --btn-primary-bg:       #ffffff;
+  --btn-primary-color:    #000000;
+  --btn-primary-border:   #ffffff;
+  --btn-primary-shadow:   none;
+  --btn-secondary-bg:     transparent;
+  --btn-secondary-color:  var(--text-strong);
+  --btn-secondary-border: var(--border-medium);
+  --btn-secondary-shadow: none;
+  --btn-ghost-color:      var(--text-body);
+  --btn-radius:           0;
+
+  /* ── Тень. Плоско: тень только у всплывающих поверхностей. ── */
+  --shadow-pop: 0 12px 40px rgba(0, 0, 0, 0.85);
+
+  /* ── Шрифты: моно везде. --font-sans алиасится на mono, чтобы
+       нативные input/button тоже были моноширинными. ── */
+  --font-mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --font-sans: var(--font-mono);
 
   --fw-regular:  400;
   --fw-medium:   500;
@@ -88,9 +110,9 @@
   --lh-snug:   1.35;
   --lh-normal: 1.5;
 
-  --ls-tight: -0.01em;
+  --ls-tight:  0;
   --ls-normal: 0;
-  --ls-label:  0.1em;
+  --ls-label:  0.12em;
 
   --section-label-transform: uppercase;
 
@@ -108,18 +130,18 @@
   --input-height: 30px;
   --tap-min:      32px;
 
-  /* ── Скругления: Console угловатый ── */
-  --radius-sm:   2px;
-  --radius-md:   3px;
-  --radius-lg:   3px;
-  --radius-xl:   4px;
-  --radius-pill: 999px;
+  /* ── Скругления: Terminal-Core угловат — всё в ноль. ── */
+  --radius-sm:   0;
+  --radius-md:   0;
+  --radius-lg:   0;
+  --radius-xl:   0;
+  --radius-pill: 0;
 
-  --radius-card:   var(--radius-md);
-  --radius-input:  var(--radius-sm);
-  --radius-row:    var(--radius-sm);
-  --radius-button: var(--radius-sm);
-  --radius-badge:  var(--radius-sm);
+  --radius-card:   0;
+  --radius-input:  0;
+  --radius-row:    0;
+  --radius-button: 0;
+  --radius-badge:  0;
 
   /* ── Движение ── */
   --ease-out:        cubic-bezier(0.22, 0.61, 0.36, 1);
@@ -128,35 +150,4 @@
   --dur-base:        140ms;
   --dur-slow:        220ms;
   --transition-base: all var(--dur-base) var(--ease-out);
-
-  /* ============================================================
-     ВРЕМЕННО: FL-совместимость.
-     PlayerPage.tsx ещё содержит живые FL-ветки — его снос отложен
-     (задача 5 плана), потому что файл содержит незакоммиченную
-     работу пользователя. Без этих токенов плеер отрендерится
-     без цветов.
-     УДАЛИТЬ вместе с задачей 5. Новый код эти токены использовать
-     не должен.
-     ============================================================ */
-  --chrome:          #bcbfc4;
-  --chrome-hi:       #e8eaec;
-  --chrome-lo:       #8b8f95;
-  --work-2:          #323843;
-  --work-3:          #252a32;
-  --ink:             #1d2024;
-  --ink-dim:         #5d626a;
-  --ink-on-work:     #cfd3d9;
-  --ink-on-work-dim: #868c95;
-  --line-work:       #1a1e25;
-  --panel:           #c4c7cc;
-  --panel-hi:        #e2e4e6;
-  --panel-lo:        #a4a8ae;
-  --btn:             #cdd0d4;
-  --btn-hi:          #f2f3f5;
-  --btn-lo:          #9da1a7;
-  --groove:          #171b21;
-  --lcd-bg:          #0b0f08;
-  --lcd-green:       #8dff6a;
-  --lcd-amber:       #ffb55b;
-  --rec:             #ff453a;
 }

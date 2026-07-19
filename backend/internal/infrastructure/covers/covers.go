@@ -1,11 +1,9 @@
 // Package covers finds publicly available cover images for a search query
-// (обложки type-beat видео). Приоритетный контент — пины Pinterest, но их
-// внутренний API для анонимных запросов закрыт (403), поэтому основной
-// рабочий источник — выдача Bing Images по запросу с добавкой «pinterest»:
-// сами картинки там в большинстве отдаёт CDN Pinterest (i.pinimg.com).
-// Порядок попыток: API Pinterest (вдруг снова откроют) → Bing → og:image со
-// страницы поиска Pinterest. Всё best effort: вызывающий код трактует ошибку
-// как «ничего не нашлось».
+// (обложки type-beat видео) через внутренний веб-API Pinterest. Анонимный
+// запрос к API отдаёт 403, пока сессия не «прогрета»: сначала GET главной
+// наполняет cookie-jar токеном csrftoken, затем запрос поиска шлёт его же в
+// заголовке X-CSRFToken (double-submit CSRF). Всё best effort: вызывающий код
+// трактует ошибку как «ничего не нашлось».
 package covers
 
 import (
@@ -15,7 +13,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"html"
 	"io"
 	"mime"
 	"net"
@@ -23,11 +20,26 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 )
 
 const browserUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+
+// pinterestAppVersion — значение заголовка X-APP-VERSION. Pinterest не сверяет
+// его строго, но без правдоподобного заголовка отвечает капризнее.
+const pinterestAppVersion = "0e2d1e8"
+
+// pageSize — сколько пинов просим за один запрос (API отдаёт ~25 максимум).
+const pageSize = 25
+
+// maxPages ограничивает пагинацию, чтобы странный ответ не зациклил Search.
+const maxPages = 12
+
+// pinterestBase — источник веб-эндпоинтов Pinterest; тесты его переопределяют.
+var pinterestBase = "https://www.pinterest.com"
+
+// errForbidden signals a 403 from the search API — обычно протухшая сессия.
+var errForbidden = errors.New("pinterest: 403")
 
 // Image is one search hit: превью для сетки и полноразмерный URL.
 type Image struct {
@@ -38,42 +50,98 @@ type Image struct {
 	Height int    `json:"height"`
 }
 
-// Search returns cover images for the query, пины Pinterest — в начале списка.
+// Search returns Pinterest pins for the query. httpc обязан иметь cookie-jar
+// (см. NewCoverService): jar хранит прогретую сессию между бутстрапом и
+// запросами поиска. Пагинация идёт по bookmark, пока не набран limit; ошибка
+// или пустой результат означают «ничего не нашлось».
 func Search(ctx context.Context, httpc *http.Client, query string, limit int) ([]Image, error) {
-	if limit <= 0 || limit > 100 {
+	if limit <= 0 {
 		limit = 40
 	}
-	if imgs, err := pinterestResource(ctx, httpc, query, limit); err == nil && len(imgs) > 0 {
-		return imgs, nil
+	if limit > 200 {
+		limit = 200
 	}
-	if imgs, err := bingImages(ctx, httpc, query, limit); err == nil && len(imgs) > 0 {
-		return imgs, nil
+	if httpc.Jar == nil {
+		return nil, errors.New("covers: http client requires a cookie jar")
 	}
-	return pinterestOG(ctx, httpc, query)
+	if err := ensureSession(ctx, httpc); err != nil {
+		return nil, err
+	}
+
+	var out []Image
+	seen := map[string]bool{}
+	seenBookmark := map[string]bool{}
+	var bookmark string
+	retried403 := false
+
+	for page := 0; page < maxPages && len(out) < limit; page++ {
+		imgs, next, err := pinterestSearch(ctx, httpc, query, bookmark)
+		if errors.Is(err, errForbidden) && !retried403 {
+			// Сессия протухла: чистим csrftoken, греем заново, повторяем страницу.
+			retried403 = true
+			clearSession(httpc)
+			if berr := ensureSession(ctx, httpc); berr != nil {
+				return capTo(out, limit), berr
+			}
+			imgs, next, err = pinterestSearch(ctx, httpc, query, bookmark)
+		}
+		if err != nil {
+			if len(out) > 0 {
+				break // уже что-то набрали — отдаём, а не рушим весь поиск
+			}
+			return nil, err
+		}
+		for _, im := range imgs {
+			if seen[im.Full] {
+				continue
+			}
+			seen[im.Full] = true
+			out = append(out, im)
+			if len(out) >= limit {
+				break
+			}
+		}
+		if next == "" || seenBookmark[next] {
+			break
+		}
+		seenBookmark[next] = true
+		bookmark = next
+	}
+	return capTo(out, limit), nil
 }
 
-// --- Bing Images (основной рабочий источник) ---
-
-// mAttrRe matches the HTML-escaped JSON blob Bing attaches to every result
-// tile: m="{&quot;murl&quot;:&quot;…&quot;,&quot;turl&quot;:&quot;…&quot;,…}".
-var mAttrRe = regexp.MustCompile(`\sm="(\{[^"]*\})"`)
-
-func bingImages(ctx context.Context, httpc *http.Client, query string, limit int) ([]Image, error) {
-	// «pinterest» в запросе смещает выдачу к пинам; сами файлы придут с
-	// i.pinimg.com и попадут в начало списка при сортировке ниже.
-	q := query
-	if !strings.Contains(strings.ToLower(q), "pinterest") {
-		q += " pinterest"
+// capTo trims imgs to limit.
+func capTo(imgs []Image, limit int) []Image {
+	if len(imgs) > limit {
+		return imgs[:limit]
 	}
-	count := limit * 2
-	if count > 100 {
-		count = 100
-	}
-	u := fmt.Sprintf("https://www.bing.com/images/search?q=%s&first=1&count=%d&safeSearch=Moderate", url.QueryEscape(q), count)
+	return imgs
+}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+// --- session ---
+
+// csrfToken returns the csrftoken cookie the jar holds for Pinterest, or "".
+func csrfToken(httpc *http.Client) string {
+	base, err := url.Parse(pinterestBase)
+	if err != nil || httpc.Jar == nil {
+		return ""
+	}
+	for _, c := range httpc.Jar.Cookies(base) {
+		if c.Name == "csrftoken" {
+			return c.Value
+		}
+	}
+	return ""
+}
+
+// ensureSession warms the jar with a csrftoken if it doesn't already have one.
+func ensureSession(ctx context.Context, httpc *http.Client) error {
+	if csrfToken(httpc) != "" {
+		return nil
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, pinterestBase+"/", nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	req.Header.Set("User-Agent", browserUA)
 	req.Header.Set("Accept", "text/html,application/xhtml+xml")
@@ -81,86 +149,76 @@ func bingImages(ctx context.Context, httpc *http.Client, query string, limit int
 
 	resp, err := httpc.Do(req)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("bing: %s", resp.Status)
-	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 6<<20))
-	if err != nil {
-		return nil, err
-	}
+	// Тело не нужно — cookie-jar уже наполнен из заголовков ответа.
+	io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
+	resp.Body.Close()
 
-	var pins, rest []Image
-	seen := map[string]bool{}
-	for _, m := range mAttrRe.FindAllStringSubmatch(string(body), -1) {
-		var meta struct {
-			MURL string `json:"murl"`
-			TURL string `json:"turl"`
-		}
-		if json.Unmarshal([]byte(html.UnescapeString(m[1])), &meta) != nil {
-			continue
-		}
-		mu, err := url.Parse(meta.MURL)
-		if err != nil || (mu.Scheme != "https" && mu.Scheme != "http") || seen[meta.MURL] {
-			continue
-		}
-		seen[meta.MURL] = true
-		thumb := meta.TURL
-		if thumb == "" {
-			thumb = meta.MURL
-		}
-		sum := sha1.Sum([]byte(meta.MURL))
-		img := Image{ID: hex.EncodeToString(sum[:8]), Thumb: thumb, Full: meta.MURL}
-		if strings.HasSuffix(strings.ToLower(mu.Hostname()), "pinimg.com") {
-			pins = append(pins, img)
-		} else {
-			rest = append(rest, img)
-		}
+	if csrfToken(httpc) == "" {
+		return errors.New("covers: no csrftoken after bootstrap")
 	}
-	imgs := append(pins, rest...)
-	if len(imgs) > limit {
-		imgs = imgs[:limit]
-	}
-	if len(imgs) == 0 {
-		return nil, errors.New("bing: no images in page")
-	}
-	return imgs, nil
+	return nil
 }
 
-// --- Pinterest (best effort: API закрыт для анонимов, но дёшево проверить) ---
+// clearSession drops the csrftoken cookie so the next ensureSession re-bootstraps.
+func clearSession(httpc *http.Client) {
+	base, err := url.Parse(pinterestBase)
+	if err != nil || httpc.Jar == nil {
+		return
+	}
+	httpc.Jar.SetCookies(base, []*http.Cookie{{Name: "csrftoken", Value: "", Path: "/", MaxAge: -1}})
+}
 
-func pinterestResource(ctx context.Context, httpc *http.Client, query string, limit int) ([]Image, error) {
-	data := fmt.Sprintf(`{"options":{"query":%q,"scope":"pins","page_size":%d},"context":{}}`, query, limit)
-	u := "https://www.pinterest.com/resource/BaseSearchResource/get/?source_url=" +
-		url.QueryEscape("/search/pins/?q="+url.QueryEscape(query)) +
-		"&data=" + url.QueryEscape(data)
+// --- search API ---
+
+// pinterestSearch fetches one page of pins and the bookmark for the next page.
+func pinterestSearch(ctx context.Context, httpc *http.Client, query, bookmark string) ([]Image, string, error) {
+	options := map[string]any{"query": query, "scope": "pins", "page_size": pageSize}
+	if bookmark != "" {
+		options["bookmarks"] = []string{bookmark}
+	}
+	dataJSON, err := json.Marshal(map[string]any{"options": options, "context": map[string]any{}})
+	if err != nil {
+		return nil, "", err
+	}
+
+	sourceURL := "/search/pins/?q=" + url.QueryEscape(query)
+	u := pinterestBase + "/resource/BaseSearchResource/get/?source_url=" +
+		url.QueryEscape(sourceURL) + "&data=" + url.QueryEscape(string(dataJSON))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	req.Header.Set("User-Agent", browserUA)
-	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Accept", "application/json, text/javascript, */*, q=0.01")
 	req.Header.Set("X-Requested-With", "XMLHttpRequest")
+	req.Header.Set("X-CSRFToken", csrfToken(httpc))
+	req.Header.Set("X-APP-VERSION", pinterestAppVersion)
+	req.Header.Set("X-Pinterest-PWS-Handler", "www/search/[scope].js")
+	req.Header.Set("Referer", pinterestBase+sourceURL)
 
 	resp, err := httpc.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusForbidden {
+		return nil, "", errForbidden
+	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("pinterest: %s", resp.Status)
+		return nil, "", fmt.Errorf("pinterest: %s", resp.Status)
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
-	var out struct {
+	var parsed struct {
 		ResourceResponse struct {
-			Data struct {
+			Bookmark string `json:"bookmark"`
+			Data     struct {
 				Results []struct {
 					ID     string `json:"id"`
 					Images map[string]struct {
@@ -172,69 +230,23 @@ func pinterestResource(ctx context.Context, httpc *http.Client, query string, li
 			} `json:"data"`
 		} `json:"resource_response"`
 	}
-	if err := json.Unmarshal(body, &out); err != nil {
-		return nil, err
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return nil, "", err
 	}
 
-	imgs := make([]Image, 0, limit)
-	for _, r := range out.ResourceResponse.Data.Results {
-		full, ok := r.Images["orig"]
-		if !ok || full.URL == "" {
-			continue
+	var imgs []Image
+	for _, r := range parsed.ResourceResponse.Data.Results {
+		orig, ok := r.Images["orig"]
+		if !ok || orig.URL == "" {
+			continue // без полноразмерной картинки пин бесполезен
 		}
-		thumb := full.URL
+		thumb := orig.URL
 		if t, ok := r.Images["236x"]; ok && t.URL != "" {
 			thumb = t.URL
 		}
-		imgs = append(imgs, Image{ID: r.ID, Thumb: thumb, Full: full.URL, Width: full.Width, Height: full.Height})
-		if len(imgs) >= limit {
-			break
-		}
+		imgs = append(imgs, Image{ID: r.ID, Thumb: thumb, Full: orig.URL, Width: orig.Width, Height: orig.Height})
 	}
-	return imgs, nil
-}
-
-// pinImgRe matches i.pinimg.com CDN links (og:image на странице поиска).
-var pinImgRe = regexp.MustCompile(`https://i\.pinimg\.com/(?:originals|736x|564x|236x)/[0-9a-f]{2}/[0-9a-f]{2}/[0-9a-f]{2}/[0-9a-f]{32}\.(?:jpg|jpeg|png|webp|gif)`)
-
-// pinterestOG scrapes whatever images the public search page still exposes.
-// Обычно это одна og:image — лучше, чем ничего, когда остальное недоступно.
-func pinterestOG(ctx context.Context, httpc *http.Client, query string) ([]Image, error) {
-	u := "https://www.pinterest.com/search/pins/?q=" + url.QueryEscape(query)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("User-Agent", browserUA)
-	req.Header.Set("Accept", "text/html,application/xhtml+xml")
-
-	resp, err := httpc.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("pinterest: %s", resp.Status)
-	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 6<<20))
-	if err != nil {
-		return nil, err
-	}
-
-	seen := map[string]bool{}
-	var imgs []Image
-	for _, m := range pinImgRe.FindAllString(string(body), -1) {
-		key := m[strings.LastIndex(m, "/")+1:]
-		if seen[key] {
-			continue
-		}
-		seen[key] = true
-		imgs = append(imgs, Image{ID: strings.TrimSuffix(key, filepath.Ext(key)), Thumb: m, Full: m})
-	}
-	if len(imgs) == 0 {
-		return nil, errors.New("covers: no images found")
-	}
-	return imgs, nil
+	return imgs, parsed.ResourceResponse.Bookmark, nil
 }
 
 // --- download ---

@@ -320,7 +320,6 @@ export function SamplesPage() {
           {/* Import toggle button */}
           <Button
             variant="primary"
-            style={{ background: "var(--warning)", borderColor: "var(--warning)" }}
             icon={scanOpen ? <Icons.X /> : <Icons.Wave />}
             onClick={() => setScanOpen((v) => !v)}
           >
@@ -438,9 +437,9 @@ export function SamplesPage() {
           {queue.some(item => item.kind === "flp") && !drumkitsDir && (
             <div style={{
               padding: "7px 10px",
-              borderRadius: 6,
-              background: "rgba(255,180,0,.13)",
-              border: "1px solid rgba(255,180,0,.35)",
+              borderRadius: 0,
+              background: "transparent",
+              border: "1px solid var(--warning)",
               fontSize: "var(--fs-caption)",
               color: "var(--warning)",
               lineHeight: 1.4,
@@ -452,7 +451,7 @@ export function SamplesPage() {
           {running ? (
             <Button variant="ghost" full icon={<Icons.Stop />} onClick={stopHarvest}>{t.common.stop}</Button>
           ) : (
-            <Button variant="primary" full icon={<Icons.Search />} disabled={queue.length === 0} onClick={runHarvest} style={{ background: "var(--warning)", borderColor: "var(--warning)" }}>
+            <Button variant="primary" full icon={<Icons.Search />} disabled={queue.length === 0} onClick={runHarvest}>
               {t.harvest.run}
             </Button>
           )}

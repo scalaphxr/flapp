@@ -88,10 +88,10 @@ body {
 
 .mono { font-family: var(--font-mono); }
 
-/* keep native inputs warm */
-input, button, textarea, select { font-family: var(--font-sans); }
+/* моно везде, включая нативные контролы */
+input, button, textarea, select { font-family: var(--font-mono); }
 
-::selection { background: var(--accent-soft); color: var(--text-strong); }
+::selection { background: var(--text-strong); color: #000; }
 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }

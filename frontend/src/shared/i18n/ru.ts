@@ -208,7 +208,7 @@ export const ru = {
     ytAuthorsEditTip: "Клик — переименовать (запомнится)",
     ytAuthorsNickTip: "Твой ник из настроек — всегда первым",
     ytTitleTemplate: "Шаблон названия",
-    ytTemplateHint: "Подстановки: {name} — название (без BPM/авторов/ника), {type} — тайп, {bpm}, {key}, {nick} — твой тег, {authors} — все авторы",
+    ytTemplateHint: "Подстановки: {name} — название (без BPM/авторов/ника), {type} — тайп, {bpm}, {key}, {nick} — твой тег, {authors} — все авторы, {year} — текущий год",
     ytTplCustom: "— свой шаблон —",
     ytTplSave: "Сохранить шаблон в пресеты",
     ytTplDelete: "Удалить шаблон из пресетов",

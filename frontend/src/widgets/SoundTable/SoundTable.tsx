@@ -7,6 +7,7 @@ import { ALL_CATEGORIES } from "@/shared/config/categories";
 import { api } from "@/shared/api/client";
 import { usePlayerStore } from "@/shared/model/player";
 import { fileDragProps } from "@/shared/lib/dragOut";
+import { decodeSampleName } from "@/shared/lib/decodeSampleName";
 
 interface SoundTableProps {
   samples: Sample[];
@@ -267,7 +268,7 @@ function SoundRow({
           fontWeight: "var(--fw-medium)" as any,
           whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
         }}>
-          {sample.name}
+          {decodeSampleName(sample.name)}
         </span>
         {showWaveform ? (
           <WaveformCanvas id={sample.id} playing={playing} durationSec={sample.features?.durationSeconds} />
@@ -434,7 +435,7 @@ function WaveformCanvas({ id, playing, durationSec }: {
 
     const style  = getComputedStyle(canvas);
     const accent = style.getPropertyValue("--accent").trim() || "#E8845C";
-    const dim    = style.getPropertyValue("--surface-3").trim() || "#2E261E";
+    const dim    = style.getPropertyValue("--wave-dim").trim() || "#666666";
     const head   = style.getPropertyValue("--text-strong").trim() || "#F4ECE3";
 
     ctx.clearRect(0, 0, pw, ph);
@@ -557,7 +558,7 @@ function WaveformCanvas({ id, playing, durationSec }: {
         width: "100%",
         height: 40,
         display: "block",
-        borderRadius: 3,
+        borderRadius: 0,
         cursor: playing ? "pointer" : "default",
         opacity: 1,
       }}

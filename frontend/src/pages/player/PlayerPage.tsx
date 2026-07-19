@@ -11,6 +11,7 @@ import { formatBytes, formatDuration } from "@/shared/lib/format";
 import { fileName, onFileDrop, pickFolder, pickFonts, isTauri } from "@/shared/lib/tauri";
 import { fileDragProps } from "@/shared/lib/dragOut";
 import { parseAuthors, joinAuthors } from "@/shared/lib/authors";
+import { decodeSampleName } from "@/shared/lib/decodeSampleName";
 import { buildKeywords, buildHashtags, mergeRoster, parseTypeArtists } from "@/shared/lib/ytKeywords";
 import { useSettingsStore } from "@/shared/model/settings";
 import { useJobsStore } from "@/shared/model/jobs";
@@ -274,7 +275,7 @@ function WaveformBar({
       : (style.getPropertyValue("--accent").trim() || "#E8845C");
     const muted = isFl
       ? (style.getPropertyValue("--ink-dim").trim() || "#5d626a")
-      : (style.getPropertyValue("--surface-3").trim() || "#2A2118");
+      : (style.getPropertyValue("--wave-dim").trim() || "#666666");
     const head = isFl
       ? (style.getPropertyValue("--lcd-amber").trim() || "#ffb55b")
       : (style.getPropertyValue("--text-body").trim() || "#F4ECE3");
@@ -339,7 +340,7 @@ function WaveformBar({
         height: isFl ? 38 : 56,
         display: "block",
         cursor: "pointer",
-        borderRadius: isFl ? 3 : 6,
+        borderRadius: 0,
         background: isFl ? "var(--groove)" : undefined,
       }}
     />
@@ -385,7 +386,7 @@ function VolKnob({ value, onChange }: { value: number; onChange: (v: number) => 
         display: "flex", alignItems: "center", justifyContent: "center",
       }}>
         <div style={{
-          position: "absolute", width: 2, height: 10, background: "var(--ink)", borderRadius: 1,
+          position: "absolute", width: 2, height: 10, background: "var(--ink)", borderRadius: 0,
           transformOrigin: "50% 100%",
           transform: `translateY(-4px) rotate(${angle}deg)`,
           top: "50%", left: "calc(50% - 1px)",
@@ -571,7 +572,7 @@ const PlayerBar = React.forwardRef<PlayerBarHandle, PlayerBarProps>(function Pla
         {/* Top row: name + meta + close */}
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span {...fileDragProps(() => [entry.path])} style={{ flex: 1, font: "600 13px var(--font-sans)", color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: "grab" }} title={t.player.hotkeys}>
-            {entry.name}
+            {decodeSampleName(entry.name)}
           </span>
           {entry.meta?.error ? (
             <span style={{ font: "400 11px var(--font-mono)", color: "var(--rec, #ff453a)", flexShrink: 0 }} title={entry.meta.error}>
@@ -618,7 +619,7 @@ const PlayerBar = React.forwardRef<PlayerBarHandle, PlayerBarProps>(function Pla
           </FlTBtn>
 
           {/* LCD time */}
-          <div style={{ display: "flex", alignItems: "center", gap: 0, background: "var(--lcd-bg)", borderRadius: 5, padding: "3px 10px", boxShadow: "inset 0 2px 6px rgba(0,0,0,.7)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 0, background: "var(--lcd-bg)", borderRadius: 0, padding: "3px 10px", boxShadow: "inset 0 2px 6px rgba(0,0,0,.7)" }}>
             <span style={{ font: "400 15px var(--font-mono)", color: "var(--lcd-amber)", textShadow: "0 0 8px rgba(255,181,91,.5)", letterSpacing: "1px" }}>
               {formatDuration(current)}
             </span>
@@ -630,13 +631,13 @@ const PlayerBar = React.forwardRef<PlayerBarHandle, PlayerBarProps>(function Pla
 
           {/* Seek track */}
           <div
-            style={{ flex: 1, height: 12, background: "var(--groove)", borderRadius: 3, cursor: "pointer", position: "relative", overflow: "hidden", border: "1px solid var(--chrome-lo)", boxShadow: "inset 0 1px 3px rgba(0,0,0,.5)" }}
+            style={{ flex: 1, height: 12, background: "var(--groove)", borderRadius: 0, cursor: "pointer", position: "relative", overflow: "hidden", border: "1px solid var(--chrome-lo)", boxShadow: "inset 0 1px 3px rgba(0,0,0,.5)" }}
             onClick={(e) => {
               const rect = e.currentTarget.getBoundingClientRect();
               seek((e.clientX - rect.left) / rect.width);
             }}
           >
-            <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${progress * 100}%`, background: "var(--lcd-green)", borderRadius: 3, boxShadow: "0 0 6px rgba(141,255,106,.5)" }} />
+            <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${progress * 100}%`, background: "var(--lcd-green)", borderRadius: 0, boxShadow: "0 0 6px rgba(141,255,106,.5)" }} />
             <div style={{ position: "absolute", top: 0, bottom: 0, width: 2, background: "var(--lcd-amber)", left: `calc(${progress * 100}% - 1px)` }} />
           </div>
 
@@ -660,7 +661,7 @@ const PlayerBar = React.forwardRef<PlayerBarHandle, PlayerBarProps>(function Pla
       {/* Название + закрыть */}
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <span {...fileDragProps(() => [entry.path])} style={{ flex: 1, fontWeight: "var(--fw-semibold)" as any, fontSize: "var(--fs-body)", color: "var(--text-body)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: "grab" }} title={t.player.hotkeys}>
-          {entry.name}
+          {decodeSampleName(entry.name)}
         </span>
         {entry.meta?.error ? (
           <span style={{ fontSize: 11, color: "var(--rec, #ff453a)", fontFamily: "var(--font-mono)", flexShrink: 0 }} title={entry.meta.error}>
@@ -733,7 +734,7 @@ function FlTBtn({ onClick, active, disabled, title, children }: { onClick: () =>
       disabled={disabled}
       title={title}
       style={{
-        width: 30, height: 30, borderRadius: 5, display: "flex", alignItems: "center", justifyContent: "center",
+        width: 30, height: 30, borderRadius: 0, display: "flex", alignItems: "center", justifyContent: "center",
         cursor: disabled ? "default" : "pointer",
         opacity: disabled ? 0.45 : 1,
         background: active ? "linear-gradient(var(--accent), var(--accent-deep, #e8651e))" : "linear-gradient(var(--btn-hi), var(--btn))",
@@ -755,7 +756,7 @@ const btnStyle: React.CSSProperties = {
   padding: 6,
   display: "flex",
   alignItems: "center",
-  borderRadius: 6,
+  borderRadius: 0,
 };
 
 // ── Таблица файлов ────────────────────────────────────────────────────────────
@@ -826,7 +827,7 @@ function FileTable({
   const containerStyle: React.CSSProperties = isFl ? {
     background: "var(--work-2)",
     border: "1px solid var(--line-work)",
-    borderRadius: 9,
+    borderRadius: 0,
     display: "flex",
     flexDirection: "column",
     flex: 1,
@@ -912,7 +913,7 @@ function FileTable({
                 {failed ? <Icons.Info width={13} height={13} /> : active ? <Icons.Play width={13} height={13} /> : <Icons.Audio width={13} height={13} />}
               </span>
               <span style={{ fontSize: isFl ? "13px" : "var(--fs-body)", fontFamily: isFl ? "var(--font-sans)" : undefined, color: isFl ? "var(--ink-on-work)" : "var(--text-body)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingRight: 8 }}>
-                {e.name}
+                {decodeSampleName(e.name)}
               </span>
               <FlCell muted={!m} isFl={isFl}>{failed ? "—" : m ? m.format : "…"}</FlCell>
               <FlCell muted={!m} isFl={isFl}>{failed ? "—" : m ? formatDuration(m.durationS) : "…"}</FlCell>
@@ -931,7 +932,7 @@ function FileTable({
                     minWidth: 0,
                     background: "transparent",
                     border: `1px solid ${isFl ? "var(--line-work)" : "var(--border)"}`,
-                    borderRadius: 5,
+                    borderRadius: 0,
                     padding: "2px 3px",
                     fontSize: "var(--fs-sm)",
                     fontFamily: "var(--font-mono)",
@@ -1057,7 +1058,7 @@ function TypeChip({
     ? {
         display: "inline-flex", alignItems: "center", gap: 6,
         height: 28, padding: showBtns ? "0 5px 0 11px" : "0 11px",
-        borderRadius: 6, cursor: "pointer", userSelect: "none", flexShrink: 0,
+        borderRadius: 0, cursor: "pointer", userSelect: "none", flexShrink: 0,
         font: "600 11.5px var(--font-sans)",
         background: active
           ? "linear-gradient(var(--accent), var(--accent-deep, #e8651e))"
@@ -1073,7 +1074,7 @@ function TypeChip({
     : {
         display: "inline-flex", alignItems: "center", gap: 6,
         height: 26, padding: showBtns ? "0 4px 0 11px" : "0 11px",
-        borderRadius: 13, cursor: "pointer", userSelect: "none", flexShrink: 0,
+        borderRadius: 0, cursor: "pointer", userSelect: "none", flexShrink: 0,
         fontSize: "var(--fs-sm)", fontWeight: "var(--fw-semibold)" as any,
         background: active ? "var(--accent-soft)" : "transparent",
         border: dropTarget
@@ -1102,7 +1103,7 @@ function TypeChip({
           onDoubleClick={(e) => e.stopPropagation()}
           style={{
             display: "flex", alignItems: "center", justifyContent: "center",
-            padding: 3, borderRadius: 4, color: "inherit", opacity: 0.9,
+            padding: 3, borderRadius: 0, color: "inherit", opacity: 0.9,
           }}
         >
           <Icons.Pencil width={10} height={10} />
@@ -1114,7 +1115,7 @@ function TypeChip({
           onClick={(e) => { e.stopPropagation(); setRevealed(false); onDelete(); }}
           style={{
             display: "flex", alignItems: "center", justifyContent: "center",
-            padding: 3, borderRadius: 4, color: "inherit", opacity: 0.9,
+            padding: 3, borderRadius: 0, color: "inherit", opacity: 0.9,
           }}
         >
           <Icons.X width={10} height={10} />
@@ -1169,11 +1170,12 @@ function stripNick(title: string, nick: string): string {
   return kept.join(" ").trim() || title;
 }
 
-/** Подставляет {name}/{type}/{bpm}/{key}/{nick} без чистки — годится и для
- * многострочного описания (переводы строк сохраняются). {name} — только
- * название бита, без BPM, авторов и ника продюсера из имени файла; {bpm}
+/** Подставляет {name}/{type}/{bpm}/{key}/{nick}/{authors}/{year} без чистки —
+ * годится и для многострочного описания (переводы строк сохраняются). {name} —
+ * только название бита, без BPM, авторов и ника продюсера из имени файла; {bpm}
  * берётся из анализа, а при его отсутствии — из имени файла; {nick} — тег
- * продюсера из настроек. */
+ * продюсера из настроек; {authors} — все продюсеры бита (свой ник + соавторы);
+ * {year} — текущий год (SEO-свежесть). */
 function renderYtVars(tpl: string, b: YtBeat, nick: string, authors: string[], roster = ""): string {
   const stem = b.name.replace(/\.[^.]+$/, "");
   const parsed = beatTitleFromStem(stem, b.bpm);
@@ -1189,6 +1191,7 @@ function renderYtVars(tpl: string, b: YtBeat, nick: string, authors: string[], r
     .split("{key}").join(b.key ?? "")
     .split("{nick}").join(nick.trim())
     .split("{authors}").join(joinAuthors(authors))
+    .split("{year}").join(String(year))
     .split("{keywords}").join(buildKeywords(typeArtists, roster, year))
     .split("{hashtags}").join(buildHashtags(typeArtists));
 }
@@ -1207,22 +1210,33 @@ function renderYtTemplate(tpl: string, b: YtBeat, nick: string, authors: string[
  * выпадашке пресетов, чтобы существующие пользователи (у кого сохранён старый
  * шаблон) могли переключиться на новый одним кликом, не теряя свой. Совпадает с
  * defaultDescription в settings.go. */
-const REFERENCE_DESC = `{type} Type Beat "{name}"
+const REFERENCE_DESC = `{type} Type Beat "{name}" | prod. {authors}
+📩 WAV / exclusive: your@email.com  ·  💿 FREE for non-profit (credit "prod. {authors}")
 
-• BPM: {bpm}  |  Key: {key}
-• Prod. {nick} — leave a like if you enjoyed 💯🤝
-• Email for WAV / exclusive: your@email.com
+• {bpm} BPM · Key {key}
+• Buy / lease: your-beatstars-link.com
+• Subscribe for daily {type} type beats 🔔
 
-[FREE] for non-profit use — you MUST credit (prod. {nick}) in your title.
-For profit / exclusive rights: contact me.
-Unauthorized use (no lease/exclusive rights) is copyright infringement, subject to DMCA takedown.
+⚠️ FREE for non-profit use only — you MUST credit "prod. {authors}" in your title.
+For-profit / exclusive rights: contact me. Unauthorized use (no lease/exclusive) is
+copyright infringement, subject to DMCA takedown.
+
+{hashtags}
 
 IGNORE ↓
 ________________________________________
+{keywords}`;
 
-{keywords}
-
-{hashtags}`;
+/** Рекомендованные шаблоны названия в стиле реальных тайп-бит видео (артист
+ * первым, год, prod-кредит). Всегда доступны в выпадашке пресетов, не затирая
+ * активный шаблон. Совпадает с YtTitleTemplates в settings.go. */
+const REFERENCE_TITLES = [
+  `[FREE] {type} Type Beat "{name}" (prod. {authors})`,
+  `[FREE] {type} Type Beat "{name}" | {year}`,
+  `{type} Type Beat ~ "{name}" | {bpm} BPM {key}`,
+  `[FREE FOR PROFIT] {type} Type Beat "{name}" | Trap Melodic {year}`,
+  `{type} type beat — {name}`,
+];
 
 /** Ручная правка одного видео пачки. Незаданное поле наследуется из шаблона —
  * так правка шаблона не затирает то, что уже поправили руками. */
@@ -1303,7 +1317,7 @@ function VideoList({ beats, focus, setFocus, assign, edits, extras, nick, aliase
   const t = useT();
   const line = isFl ? "var(--line-work)" : "var(--border)";
   return (
-    <div style={{ width: 262, flexShrink: 0, borderRight: `1px solid ${line}`, display: "flex", flexDirection: "column", background: isFl ? "var(--work-2)" : "var(--surface-1, transparent)" }}>
+    <div style={{ width: 290, flexShrink: 0, borderRight: `1px solid ${line}`, display: "flex", flexDirection: "column", background: isFl ? "var(--work-2)" : "var(--surface-1, transparent)" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 10px", borderBottom: `1px solid ${line}`, flexShrink: 0 }}>
         <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", color: isFl ? "var(--ink-dim)" : "var(--text-faint)" }}>
           {t.player.ytAllVideos}
@@ -1313,7 +1327,7 @@ function VideoList({ beats, focus, setFocus, assign, edits, extras, nick, aliase
           disabled={busy}
           title={t.player.ytCoversHint}
           style={{
-            marginLeft: "auto", border: `1px solid ${line}`, borderRadius: 5, background: "transparent",
+            marginLeft: "auto", border: `1px solid ${line}`, borderRadius: 0, background: "transparent",
             color: isFl ? "var(--ink-dim)" : "var(--text-muted)", fontSize: 10, padding: "2px 7px",
             cursor: busy ? "default" : "pointer", opacity: busy ? 0.5 : 1,
           }}
@@ -1325,9 +1339,14 @@ function VideoList({ beats, focus, setFocus, assign, edits, extras, nick, aliase
           const cover = assign[b.path];
           const sel = focus === b.path;
           const authors = beatAuthors(b, nick, aliases, extras[b.path] ?? []);
+          // В списке — короткое имя бита (его и опознают), а не полный шаблонный
+          // тайтл: у всех строк одинаковое начало «[FREE] … Type Beat», из-за
+          // чего различающее имя обрезалось. Полный итоговый тайтл — в подсказке.
+          const beatName = stripNick(beatTitleFromStem(b.name.replace(/\.[^.]+$/, ""), b.bpm).title, nick) || resolveBeat(b).title;
           return (
             <div
               key={b.path}
+              title={resolveBeat(b).title}
               onClick={() => setFocus(b.path)}
               style={{
                 display: "flex", alignItems: "center", gap: 7, padding: "7px 9px",
@@ -1341,13 +1360,13 @@ function VideoList({ beats, focus, setFocus, assign, edits, extras, nick, aliase
                   src={cover.thumb} alt="" loading="lazy"
                   title={t.player.ytCoverPick}
                   onClick={(e) => { e.stopPropagation(); onPick(b.path); }}
-                  style={{ width: 42, height: 28, objectFit: "cover", borderRadius: 4, flexShrink: 0, background: "#000", border: `1px solid ${line}` }}
+                  style={{ width: 52, height: 34, objectFit: "cover", borderRadius: 0, flexShrink: 0, background: "#000", border: `1px solid ${line}` }}
                 />
               ) : (
                 <div
                   title={t.player.ytCoverPick}
                   onClick={(e) => { e.stopPropagation(); onPick(b.path); }}
-                  style={{ width: 42, height: 28, borderRadius: 4, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: isFl ? "var(--groove)" : "var(--surface-3)", border: `1px solid ${line}`, color: isFl ? "var(--ink-dim)" : "var(--text-faint)" }}
+                  style={{ width: 52, height: 34, borderRadius: 0, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: isFl ? "var(--groove)" : "var(--surface-3)", border: `1px solid ${line}`, color: isFl ? "var(--ink-dim)" : "var(--text-faint)" }}
                 >
                   <Icons.Search width={11} height={11} />
                 </div>
@@ -1357,13 +1376,13 @@ function VideoList({ beats, focus, setFocus, assign, edits, extras, nick, aliase
                   {edits[b.path] && (
                     <span title={t.player.ytEdited} style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--accent)", flexShrink: 0 }} />
                   )}
-                  <span style={{ flex: 1, fontSize: 11, lineHeight: 1.3, color: isFl ? "var(--ink-on-work)" : "var(--text-body)", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
-                    {resolveBeat(b).title}
+                  <span style={{ flex: 1, fontSize: 13, fontWeight: 600, lineHeight: 1.3, color: isFl ? "var(--ink-on-work)" : "var(--text-body)", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
+                    {beatName}
                   </span>
                 </div>
-                {/* Авторы каждого бита — разницу по пачке видно, не открывая */}
-                <span style={{ fontSize: 9.5, color: isFl ? "var(--ink-dim)" : "var(--text-faint)", overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis", display: "block" }}>
-                  {authors.join(" × ") || "—"}
+                {/* Тип и авторы — по ним видно разницу битов, не открывая каждый */}
+                <span style={{ fontSize: 10.5, color: isFl ? "var(--ink-dim)" : "var(--text-faint)", overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis", display: "block" }}>
+                  {b.typeName}{authors.length ? ` · ${authors.join(" × ")}` : ""}
                 </span>
                 {st.text && (
                   <span style={{ fontFamily: "var(--font-mono)", fontSize: 9.5, color: st.failed ? "var(--rec, #ff453a)" : st.url ? "var(--positive, #46d46a)" : (isFl ? "var(--ink-dim)" : "var(--text-faint)") }}>
@@ -1374,7 +1393,7 @@ function VideoList({ beats, focus, setFocus, assign, edits, extras, nick, aliase
               <button
                 onClick={(e) => { e.stopPropagation(); onCycle(b.path); }}
                 title={t.player.ytCoverCycle}
-                style={{ border: `1px solid ${line}`, borderRadius: 4, background: "transparent", width: 22, height: 22, padding: 0, cursor: "pointer", flexShrink: 0, fontSize: 11 }}
+                style={{ border: `1px solid ${line}`, borderRadius: 0, background: "transparent", width: 22, height: 22, padding: 0, cursor: "pointer", flexShrink: 0, fontSize: 11 }}
               >🎲</button>
             </div>
           );
@@ -1400,7 +1419,7 @@ function BeatEditor({ b, v, e, onEdit, isFl }: {
     padding: "5px 8px",
     background: isFl ? "var(--groove)" : "var(--surface-input, var(--surface-3))",
     border: `1px solid ${line}`,
-    borderRadius: 6,
+    borderRadius: 0,
     color: isFl ? "var(--ink-on-work)" : "var(--text-body)",
     fontFamily: "var(--font-sans)",
     fontSize: 12,
@@ -1418,7 +1437,7 @@ function BeatEditor({ b, v, e, onEdit, isFl }: {
       disabled={e[k] === undefined}
       title={t.player.ytResetToTemplate}
       style={{
-        border: `1px solid ${line}`, borderRadius: 5, background: "transparent",
+        border: `1px solid ${line}`, borderRadius: 0, background: "transparent",
         color: isFl ? "var(--ink-dim)" : "var(--text-faint)",
         cursor: e[k] === undefined ? "default" : "pointer",
         opacity: e[k] === undefined ? 0.35 : 1,
@@ -1443,7 +1462,7 @@ function BeatEditor({ b, v, e, onEdit, isFl }: {
       <input value={v.title} onChange={(ev) => onEdit(b.path, { title: ev.target.value })} style={field} spellCheck={false} />
 
       {head(t.player.ytEditDesc, "desc")}
-      <textarea value={v.description} onChange={(ev) => onEdit(b.path, { desc: ev.target.value })} rows={3} style={{ ...field, resize: "vertical", fontFamily: "var(--font-sans)" }} spellCheck={false} />
+      <textarea value={v.description} onChange={(ev) => onEdit(b.path, { desc: ev.target.value })} style={{ ...field, resize: "vertical", fontFamily: "var(--font-sans)", minHeight: 150, lineHeight: 1.45 }} spellCheck={false} />
 
       <div style={{ display: "flex", gap: 8 }}>
         <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
@@ -1490,7 +1509,7 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
   const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
   const [previewBusy, setPreviewBusy] = React.useState(false);
   const [previewErr, setPreviewErr] = React.useState<string | null>(null);
-  const [tpl, setTpl] = React.useState(settings?.ytTitleTemplate || '[FREE] {type} Type Beat "{name}" | {bpm} BPM {key}');
+  const [tpl, setTpl] = React.useState(settings?.ytTitleTemplate || '[FREE] {type} Type Beat "{name}" (prod. {authors})');
   const [desc, setDesc] = React.useState(settings?.ytDescription ?? "");
   const [tags, setTags] = React.useState(settings?.ytTags ?? "");
   const [privacy, setPrivacy] = React.useState(settings?.ytPrivacy || "public");
@@ -1507,7 +1526,6 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
   const [started, setStarted] = React.useState(false);
   // Вкладка правой панели. Имя вкладки — это и есть ответ на вопрос «на что
   // повлияет то, что я тут правлю».
-  const [tab, setTab] = React.useState<"video" | "shared">("video");
 
   // Тайп-артисты пачки — источник автоподбора тегов и обложек.
   const artists = React.useMemo(
@@ -1946,8 +1964,14 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
   React.useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
 
   // Пресеты шаблонов живут в настройках; стор обновляется оптимистично,
-  // поэтому читаем прямо из него — диалог перерисуется сам.
-  const tplPresets = settings?.ytTitleTemplates ?? [];
+  // поэтому читаем прямо из него — диалог перерисуется сам. Рекомендованные
+  // тайтлы всегда доступны в выпадашке (не затирая активный шаблон).
+  const tplPresets = React.useMemo(() => {
+    const saved = settings?.ytTitleTemplates ?? [];
+    const merged = [...saved];
+    for (const t of REFERENCE_TITLES) if (!merged.includes(t)) merged.push(t);
+    return merged;
+  }, [settings?.ytTitleTemplates]);
   const tplSaved = tplPresets.includes(tpl.trim());
 
   function savePreset() {
@@ -2113,7 +2137,7 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
     padding: "0 10px",
     background: isFl ? "var(--groove)" : "var(--surface-input, var(--surface-3))",
     border: `1px solid ${isFl ? "var(--line-work)" : "var(--border)"}`,
-    borderRadius: 7,
+    borderRadius: 0,
     boxShadow: isFl ? "inset 0 2px 4px rgba(0,0,0,.35)" : undefined,
     color: isFl ? "var(--ink-on-work)" : "var(--text-body)",
     fontFamily: "var(--font-sans)",
@@ -2131,7 +2155,7 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
     display: "inline-flex", alignItems: "center", gap: 7,
     height: 32, padding: "0 12px",
     background: "linear-gradient(var(--btn-hi),var(--btn))",
-    border: "1px solid var(--chrome-lo)", borderRadius: 7,
+    border: "1px solid var(--chrome-lo)", borderRadius: 0,
     color: "var(--ink)", font: "600 12px var(--font-sans)",
     cursor: "pointer",
     boxShadow: "inset 0 1px 0 rgba(255,255,255,.5),0 1px 2px rgba(0,0,0,.25)",
@@ -2139,13 +2163,13 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
     display: "inline-flex", alignItems: "center", gap: 7,
     height: 32, padding: "0 12px",
     background: "transparent",
-    border: "1px solid var(--border)", borderRadius: 7,
+    border: "1px solid var(--border)", borderRadius: 0,
     color: "var(--text-body)", fontSize: 12.5, fontWeight: 600,
     cursor: "pointer",
   };
   const chipStyle: React.CSSProperties = {
     display: "inline-flex", alignItems: "center", gap: 5,
-    height: 24, padding: "0 4px 0 9px", borderRadius: 12,
+    height: 24, padding: "0 4px 0 9px", borderRadius: 0,
     background: isFl ? "var(--accent-soft, rgba(255,138,60,.16))" : "var(--surface-3)",
     border: `1px solid ${isFl ? "var(--line-work)" : "var(--border)"}`,
     color: isFl ? "var(--ink-on-work)" : "var(--text-body)",
@@ -2156,6 +2180,18 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
     width: 16, height: 16, borderRadius: "50%", border: "none",
     background: "transparent", color: "inherit", cursor: "pointer",
     fontSize: 14, lineHeight: 1, opacity: 0.65, padding: 0,
+  };
+
+  // Общие для рабочей области: цвет разделителей и «шапка колонки» (в пачке
+  // над каждой из трёх колонок — список / это видео / общее).
+  const line = isFl ? "var(--line-work)" : "var(--border)";
+  const colHead: React.CSSProperties = {
+    display: "flex", alignItems: "center", gap: 6,
+    padding: "9px 16px", flexShrink: 0,
+    borderBottom: `1px solid ${line}`,
+    fontSize: 10, fontWeight: 700, letterSpacing: "1px",
+    textTransform: "uppercase",
+    color: isFl ? "var(--ink-dim)" : "var(--text-faint)",
   };
 
   const allDone = started && beats.every((b) => {
@@ -2179,10 +2215,10 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
         style={{
           // Пачка живёт в двух панелях (список слева, детали справа), одиночное
           // видео — в одной колонке: там «общее» и «это видео» совпадают.
-          width: isBatch ? 1000 : 580, maxWidth: "94vw", height: isBatch ? "88vh" : undefined, maxHeight: "88vh",
+          width: isBatch ? 1240 : 580, maxWidth: "94vw", height: isBatch ? "88vh" : undefined, maxHeight: "88vh",
           background: isFl ? "linear-gradient(var(--panel-hi), var(--panel))" : "var(--surface-2)",
           border: `1px solid ${isFl ? "var(--panel-lo)" : "var(--border)"}`,
-          borderRadius: 12,
+          borderRadius: 0,
           display: "flex", flexDirection: "column",
           overflow: "hidden",
           boxShadow: "0 12px 40px rgba(0,0,0,.5)",
@@ -2206,7 +2242,7 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
         <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: (ytOk === false || ffmpegOk === false) ? "12px 18px 0 18px" : 0, flexShrink: 0 }}>
         {/* Подключение не настроено */}
         {ytOk === false && (
-          <div style={{ padding: "8px 12px", borderRadius: 7, background: "rgba(255,69,58,.12)", border: "1px solid rgba(255,69,58,.4)", color: "var(--rec, #ff453a)", fontSize: 12.5 }}>
+          <div style={{ padding: "8px 12px", borderRadius: 0, background: "transparent", border: "1px solid var(--danger)", color: "var(--danger)", fontSize: 12.5 }}>
             {t.player.ytNeedSetup}
           </div>
         )}
@@ -2215,7 +2251,7 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
         {ffmpegOk === false && (
           <div style={{
             display: "flex", flexDirection: "column", gap: 8,
-            padding: "10px 12px", borderRadius: 7, fontSize: 12.5,
+            padding: "10px 12px", borderRadius: 0, fontSize: 12.5,
             background: "rgba(255,181,91,.10)", border: "1px solid rgba(255,181,91,.45)",
             color: isFl ? "var(--ink)" : "var(--text-body)",
           }}>
@@ -2225,7 +2261,7 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
             </span>
             {ffJob && (ffJob.status === "running" || ffJob.status === "queued") ? (
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ flex: 1, height: 6, borderRadius: 3, background: isFl ? "var(--groove)" : "var(--surface-3)", overflow: "hidden" }}>
+                <div style={{ flex: 1, height: 6, borderRadius: 0, background: isFl ? "var(--groove)" : "var(--surface-3)", overflow: "hidden" }}>
                   <div style={{ width: `${Math.round((ffJob.progress || 0) * 100)}%`, height: "100%", background: "var(--accent)", transition: "width 300ms" }} />
                 </div>
                 <span style={{ flexShrink: 0, fontFamily: "var(--font-mono)", fontSize: 11 }}>
@@ -2250,8 +2286,10 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
 
         </div>
 
-        {/* Рабочая область: слева все видео, справа — выбранное */}
-        <div style={{ flex: 1, display: "flex", alignItems: "stretch", minHeight: 0 }}>
+        {/* Рабочая область: слева все видео, затем «это видео» и «общее».
+            В пачке — три колонки в ряд; одиночное видео — одна колонка со
+            своим скроллом (списка слева нет). */}
+        <div style={{ flex: 1, display: "flex", flexDirection: isBatch ? "row" : "column", alignItems: "stretch", minHeight: 0, overflowY: isBatch ? undefined : "auto" }}>
 
           {isBatch && (
             <VideoList
@@ -2265,31 +2303,19 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
             />
           )}
 
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
-            {/* Вкладки называют область действия вслух */}
-            {isBatch && (
-              <div style={{ display: "flex", gap: 4, padding: "10px 14px 0 14px", flexShrink: 0, borderBottom: `1px solid ${isFl ? "var(--line-work)" : "var(--border)"}` }}>
-                {([["video", t.player.ytTabVideo], ["shared", t.player.ytTabShared]] as const).map(([k, label]) => (
-                  <button
-                    key={k}
-                    onClick={() => setTab(k)}
-                    style={{
-                      border: `1px solid ${tab === k ? (isFl ? "var(--line-work)" : "var(--border)") : "transparent"}`,
-                      borderBottomColor: tab === k ? (isFl ? "var(--work-2)" : "var(--surface-2)") : "transparent",
-                      background: tab === k ? (isFl ? "var(--work-2)" : "var(--surface-2)") : "transparent",
-                      color: tab === k ? (isFl ? "var(--ink)" : "var(--text-body)") : (isFl ? "var(--ink-dim)" : "var(--text-faint)"),
-                      borderRadius: "7px 7px 0 0", padding: "6px 14px", marginBottom: -1,
-                      fontSize: 12, fontWeight: 600, cursor: "pointer",
-                    }}
-                  >{label}</button>
-                ))}
-              </div>
-            )}
+          {/* Рабочая область в пачке — три независимо скроллящиеся колонки:
+              список видео | это видео | общее. Раньше «это видео» и «общее»
+              делили одну узкую колонку через вкладки: половина всегда была
+              скрыта, а широкий диалог простаивал. Одиночное видео — одна
+              колонка (списка слева у него нет). */}
+          {/* Колонка «это видео» */}
+          <div style={{
+            display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0,
+            ...(isBatch ? { flex: "0 0 440px", overflowY: "auto", borderRight: `1px solid ${line}` } : {}),
+          }}>
+            {isBatch && <div style={colHead}>{t.player.ytTabVideo}</div>}
+            <div style={{ padding: "14px 16px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
 
-            <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px 16px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
-
-        {/* ── Это видео ─────────────────────────────────────────────────── */}
-        {(!isBatch || tab === "video") && (<>
 
         {/* Обложка: одна (один бит) или разные по тайп-артисту (пачка) */}
         {!isBatch && (
@@ -2314,7 +2340,7 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
         {/* Pinterest-пикер обложки */}
         {pin && (
           <div style={{
-            display: "flex", flexDirection: "column", gap: 8, padding: 10, borderRadius: 8,
+            display: "flex", flexDirection: "column", gap: 8, padding: 10, borderRadius: 0,
             border: `1px solid ${isFl ? "var(--line-work)" : "var(--border)"}`,
             background: isFl ? "var(--work-2)" : "transparent",
           }}>
@@ -2356,7 +2382,7 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
                     onClick={() => { if (!pin.picking) void pinPick(img); }}
                     style={{
                       width: "100%", aspectRatio: "1 / 1", objectFit: "cover", display: "block",
-                      borderRadius: 6, cursor: pin.picking ? "progress" : "pointer",
+                      borderRadius: 0, cursor: pin.picking ? "progress" : "pointer",
                       opacity: pin.picking && pin.picking !== img.full ? 0.4 : 1,
                       outline: pin.picking === img.full ? "2px solid var(--accent)" : "none",
                     }}
@@ -2371,12 +2397,12 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
             обложку надо именно отсюда, а пряталось оно вместе с кадром. */}
         {/* Кадр и поля этого видео — рядом. Раньше превью было вверху, а список
             и правки внизу: отсюда и брались «глаза бегают туда-сюда». */}
-        <div style={{ display: "flex", flexDirection: isBatch ? "row" : "column", gap: 14, alignItems: "flex-start" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14, alignItems: "stretch" }}>
 
         {(isBatch || image) && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, width: isBatch ? 300 : "100%", flexShrink: 0 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%", flexShrink: 0 }}>
             <span style={labelStyle}>{t.player.ytPreviewCover}</span>
-            <div style={{ position: "relative", width: "100%", aspectRatio: "16 / 9", borderRadius: 8, overflow: "hidden", background: "#000", border: `1px solid ${isFl ? "var(--line-work)" : "var(--border)"}` }}>
+            <div style={{ position: "relative", width: "100%", aspectRatio: "16 / 9", borderRadius: 0, overflow: "hidden", background: "#000", border: `1px solid ${isFl ? "var(--line-work)" : "var(--border)"}` }}>
               {/* Кадр из ffmpeg — тот же фильтр, что и у итогового видео. */}
               {frameUrl ? (
                 <img src={frameUrl} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain" }} />
@@ -2409,7 +2435,7 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
               )}
             </div>
             {previewUrl && (
-              <video src={previewUrl} controls autoPlay style={{ width: "100%", maxHeight: 280, borderRadius: 8, background: "#000", display: "block" }} />
+              <video src={previewUrl} controls autoPlay style={{ width: "100%", maxHeight: 280, borderRadius: 0, background: "#000", display: "block" }} />
             )}
           </div>
         )}
@@ -2421,7 +2447,7 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
             Свойство видео: у каждого бита свои авторы, из своего имени файла. */}
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <span style={labelStyle}>{t.player.ytAuthors}</span>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", padding: 6, borderRadius: 7, border: `1px solid ${isFl ? "var(--line-work)" : "var(--border)"}`, background: isFl ? "var(--work-3)" : "transparent" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", padding: 6, borderRadius: 0, border: `1px solid ${isFl ? "var(--line-work)" : "var(--border)"}`, background: isFl ? "var(--work-3)" : "transparent" }}>
             {nick.trim() && (
               <span style={{ ...chipStyle, opacity: 0.8, paddingRight: 9 }} title={t.player.ytAuthorsNickTip}>{nick.trim()}</span>
             )}
@@ -2471,10 +2497,18 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
         </div>
         </div>
 
-        </>)}
+            </div>
+          </div>
+
+          {/* Колонка «общее для всех» */}
+          <div style={{
+            display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0,
+            ...(isBatch ? { flex: 1, minWidth: 380, overflowY: "auto" } : {}),
+          }}>
+            {isBatch && <div style={colHead}>{t.player.ytTabShared}</div>}
+            <div style={{ padding: "14px 16px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
 
         {/* ── Общее для всех ────────────────────────────────────────────── */}
-        {(!isBatch || tab === "shared") && (<>
 
         {/* Ник продюсера: подставляется как {nick} и вычищается из {name} */}
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -2582,9 +2616,8 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
             <textarea
               value={desc}
               onChange={(e) => setDesc(e.target.value)}
-              rows={4}
               placeholder={t.player.ytDescPlaceholder}
-              style={{ ...inputStyle, flex: 1, minWidth: 0, height: "auto", padding: "8px 10px", resize: "vertical", minHeight: 76, fontFamily: "var(--font-sans)", lineHeight: 1.45 }}
+              style={{ ...inputStyle, flex: 1, minWidth: 0, height: "auto", padding: "8px 10px", resize: "vertical", minHeight: 240, fontFamily: "var(--font-sans)", lineHeight: 1.45 }}
             />
             <div style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 }}>
               <button
@@ -2647,7 +2680,7 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
             {t.player.ytRosterAutoGrow}
           </label>
           <label style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 4 }}>{t.player.ytKeywordsPreview}</label>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-faint)", maxHeight: 90, overflowY: "auto", whiteSpace: "pre-wrap", wordBreak: "break-word", border: "1px solid var(--stroke, #333)", borderRadius: 4, padding: 6 }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-faint)", maxHeight: 90, overflowY: "auto", whiteSpace: "pre-wrap", wordBreak: "break-word", border: "1px solid var(--stroke, #333)", borderRadius: 0, padding: 6 }}>
             {kwPreview.keywords || "—"}
           </div>
           <label style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 4 }}>{t.player.ytHashtagsPreview}</label>
@@ -2670,11 +2703,9 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
           </div>
         )}
 
-        </>)}
-
+              </div>
             </div>
           </div>
-        </div>
 
         {/* Подвал: статус окружения слева, действия справа */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", borderTop: `1px solid ${isFl ? "var(--line-work)" : "var(--border)"}`, flexShrink: 0 }}>
@@ -2695,7 +2726,7 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
                   opacity: started ? 0.55 : 1,
                   background: isFl ? "linear-gradient(var(--accent), var(--accent-deep, #e8651e))" : "var(--accent)",
                   border: isFl ? "1px solid var(--chrome-lo)" : "1px solid var(--accent)",
-                  color: "#fff",
+                  color: isFl ? "#fff" : "var(--text-on-accent)",
                 }}
               >
                 <Icons.Yt width={13} height={13} />
@@ -2713,8 +2744,10 @@ function YtUploadDialog({ beats, isFl, onClose }: { beats: YtBeat[]; isFl: boole
 
 export function PlayerPage() {
   const t = useT();
-  const _theme = useSettingsStore((s) => s.settings?.theme);
-  const isFl = _theme === "fl";
+  // Terminal-Core: единая тема. FL-скин (хром-панели, LCD) снят — рендерится
+  // только чистая, токен-ориентированная ветка. _theme больше не влияет на скин.
+  useSettingsStore((s) => s.settings?.theme);
+  const isFl = false;
 
   // Плейлист восстанавливается из localStorage — переживает перезапуск и
   // переключение вкладок (страница размонтируется при уходе с таба).
@@ -3245,7 +3278,7 @@ export function PlayerPage() {
               </span>
             )}
             <div style={{ flex: 1 }} />
-            <div style={{ display: "flex", alignItems: "center", gap: 9, height: 36, padding: "0 12px", background: "var(--work-3)", border: "1px solid var(--line-work)", borderRadius: 7, boxShadow: "inset 0 2px 5px rgba(0,0,0,.4)", width: 220 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 9, height: 36, padding: "0 12px", background: "var(--work-3)", border: "1px solid var(--line-work)", borderRadius: 0, boxShadow: "inset 0 2px 5px rgba(0,0,0,.4)", width: 220 }}>
               <Icons.Search width={13} height={13} style={{ color: "var(--ink-on-work-dim)", flexShrink: 0 }} />
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.player.searchPlaceholder}
                 style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: "var(--ink-on-work)", font: "500 13px var(--font-sans)" }} />
@@ -3306,7 +3339,7 @@ export function PlayerPage() {
               style={{
                 display: "inline-flex", alignItems: "center", gap: 6,
                 height: isFl ? 24 : 22, padding: "0 4px 0 9px",
-                borderRadius: isFl ? 6 : 11,
+                borderRadius: 0,
                 border: `1px solid ${isFl ? "var(--line-work)" : "var(--border)"}`,
                 color: isFl ? "var(--ink)" : "var(--text-muted)",
                 background: isFl ? "linear-gradient(var(--btn-hi), var(--btn))" : "transparent",
@@ -3346,7 +3379,7 @@ export function PlayerPage() {
               height: isFl ? 28 : 26,
               width: 150,
               padding: "0 10px",
-              borderRadius: isFl ? 6 : 13,
+              borderRadius: 0,
               border: "1px solid var(--accent)",
               background: isFl ? "var(--work-3)" : "var(--surface-2)",
               color: isFl ? "var(--ink-on-work)" : "var(--text-body)",
@@ -3413,14 +3446,14 @@ export function PlayerPage() {
                   display: "inline-flex", alignItems: "center", gap: 5,
                   height: 28, padding: "0 10px",
                   background: "transparent",
-                  border: "1px dashed var(--chrome-lo)", borderRadius: 6,
+                  border: "1px dashed var(--chrome-lo)", borderRadius: 0,
                   color: "var(--ink-dim)", font: "600 11.5px var(--font-sans)",
                   cursor: "pointer", flexShrink: 0,
                 } : {
                   display: "inline-flex", alignItems: "center", gap: 5,
                   height: 26, padding: "0 10px",
                   background: "transparent",
-                  border: "1px dashed var(--border)", borderRadius: 13,
+                  border: "1px dashed var(--border)", borderRadius: 0,
                   color: "var(--text-faint)", fontSize: "var(--fs-sm)",
                   fontWeight: "var(--fw-semibold)" as any,
                   cursor: "pointer", flexShrink: 0,
@@ -3464,7 +3497,7 @@ export function PlayerPage() {
         }}>
           <div style={{
             border: isFl ? "1px solid var(--line-work)" : "2px dashed var(--border)",
-            borderRadius: isFl ? 9 : 16,
+            borderRadius: 0,
             padding: "40px 60px",
             textAlign: "center",
             color: isFl ? "var(--ink-on-work-dim)" : "var(--text-faint)",
@@ -3503,7 +3536,7 @@ const flToolBtn: React.CSSProperties = {
   display: "flex", alignItems: "center", gap: 7,
   height: 36, padding: "0 12px",
   background: "linear-gradient(var(--btn-hi),var(--btn))",
-  border: "1px solid var(--chrome-lo)", borderRadius: 7,
+  border: "1px solid var(--chrome-lo)", borderRadius: 0,
   color: "var(--ink)", font: "600 12.5px var(--font-sans)",
   cursor: "pointer",
   boxShadow: "inset 0 1px 0 rgba(255,255,255,.5),0 1px 2px rgba(0,0,0,.25)",

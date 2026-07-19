@@ -41,7 +41,7 @@ type Settings struct {
 	// пустая строка = «это не автор». Парсинг на фронте, бэкенд только хранит.
 	YtAuthorAliases map[string]string `json:"ytAuthorAliases"`
 	YtDefaultImage  string `json:"ytDefaultImage"`  // обложка по умолчанию
-	YtTitleTemplate string `json:"ytTitleTemplate"` // активный шаблон названия: {name} {type} {bpm} {key} {nick}
+	YtTitleTemplate string `json:"ytTitleTemplate"` // активный шаблон названия: {name} {type} {bpm} {key} {nick} {authors} {year}
 	// Сохранённые пресеты шаблонов названия — переключаются в диалоге загрузки.
 	YtTitleTemplates []string `json:"ytTitleTemplates"`
 	YtDescription    string   `json:"ytDescription"` // активное описание: те же подстановки, что в названии
@@ -69,18 +69,19 @@ func Defaults() Settings {
 		AutoUpdate:     true,
 		BackupOnExit:   false,
 
-		YtTitleTemplate: `[FREE] {type} Type Beat "{name}" | {bpm} BPM {key}`,
+		YtTitleTemplate: `[FREE] {type} Type Beat "{name}" (prod. {authors})`,
 		YtTitleTemplates: []string{
-			`[FREE] {type} Type Beat "{name}" | {bpm} BPM {key}`,
-			`{name} | {type} type beat {bpm}bpm {key}`,
-			`[FREE] {type} x {nick} Type Beat "{name}"`,
+			`[FREE] {type} Type Beat "{name}" (prod. {authors})`,
+			`[FREE] {type} Type Beat "{name}" | {year}`,
+			`{type} Type Beat ~ "{name}" | {bpm} BPM {key}`,
+			`[FREE FOR PROFIT] {type} Type Beat "{name}" | Trap Melodic {year}`,
 			`{type} type beat — {name}`,
 		},
 		YtDescription: defaultDescription,
 		YtDescTemplates: []string{
 			defaultDescription,
 		},
-		YtTags:           "type beat, instrumental, beat, free type beat",
+		YtTags:           "type beat, free type beat, trap type beat, melodic type beat, instrumental",
 		YtPrivacy:        "public",
 		YtKeywordRoster:  "",
 		YtRosterAutoGrow: true,
@@ -88,23 +89,25 @@ func Defaults() Settings {
 }
 
 // defaultDescription — готовый шаблон описания для тайп-бита. Подстановки те же,
-// что и в названии, плюс {nick} — тег продюсера из настроек.
-const defaultDescription = `{type} Type Beat "{name}"
+// что и в названии, плюс {authors} — все продюсеры бита. Лицензия и контакт —
+// в первых двух строках (над «Показать ещё»), дальше стена ключей. Совпадает с
+// REFERENCE_DESC в PlayerPage.tsx.
+const defaultDescription = `{type} Type Beat "{name}" | prod. {authors}
+📩 WAV / exclusive: your@email.com  ·  💿 FREE for non-profit (credit "prod. {authors}")
 
-• BPM: {bpm}  |  Key: {key}
-• Prod. {nick} — leave a like if you enjoyed 💯🤝
-• Email for WAV / exclusive: your@email.com
+• {bpm} BPM · Key {key}
+• Buy / lease: your-beatstars-link.com
+• Subscribe for daily {type} type beats 🔔
 
-[FREE] for non-profit use — you MUST credit (prod. {nick}) in your title.
-For profit / exclusive rights: contact me.
-Unauthorized use (no lease/exclusive rights) is copyright infringement, subject to DMCA takedown.
+⚠️ FREE for non-profit use only — you MUST credit "prod. {authors}" in your title.
+For-profit / exclusive rights: contact me. Unauthorized use (no lease/exclusive) is
+copyright infringement, subject to DMCA takedown.
+
+{hashtags}
 
 IGNORE ↓
 ________________________________________
-
-{keywords}
-
-{hashtags}`
+{keywords}`
 
 // Store reads and writes the settings file under a mutex.
 type Store struct {

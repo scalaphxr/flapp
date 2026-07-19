@@ -126,6 +126,7 @@ func (s *Server) routes() {
 	m.HandleFunc("POST /api/youtube/ffmpeg/download", s.handleYouTubeFfmpegDownload)
 	m.HandleFunc("POST /api/youtube/upload", s.handleYouTubeUpload)
 	m.HandleFunc("POST /api/youtube/preview", s.handleYouTubePreview)
+	m.HandleFunc("POST /api/youtube/preview-frame", s.handleYouTubePreviewFrame)
 	m.HandleFunc("GET /api/youtube/tags", s.handleYouTubeTags)
 
 	// Cover images (Pinterest search + local download for the renderer).

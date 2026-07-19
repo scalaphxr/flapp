@@ -24,6 +24,24 @@ export async function pickFiles(): Promise<string[]> {
   }
 }
 
+// pickFonts opens a native multi-select dialog limited to font files and
+// returns chosen paths — свои шрифты для надписи поверх видео.
+export async function pickFonts(): Promise<string[]> {
+  if (!isTauri()) return [];
+  try {
+    const { open } = await import("@tauri-apps/plugin-dialog");
+    const selected = await open({
+      multiple: true,
+      directory: false,
+      filters: [{ name: "Fonts", extensions: ["ttf", "otf"] }],
+    });
+    if (!selected) return [];
+    return Array.isArray(selected) ? selected : [selected];
+  } catch {
+    return [];
+  }
+}
+
 // pickFolder opens a native folder picker and returns the chosen directory.
 export async function pickFolder(): Promise<string | null> {
   if (!isTauri()) return null;

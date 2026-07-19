@@ -75,8 +75,9 @@ export function buildKeywords(artists: string[], roster: string, year: number, b
 }
 
 /** Хэштеги бита: тип-артисты → «#ArtistTypeBeat» (CamelCase, только буквы/цифры).
- *  Дедуп без учёта регистра, лимит max (YouTube прячет спам-количество). */
-export function buildHashtags(artists: string[], max = 15): string {
+ *  Дедуп без учёта регистра, лимит max. Дефолт 5: с 2026 YouTube помечает
+ *  описания с >5 хэштегов как спам и прячет их, поэтому режем жёстко. */
+export function buildHashtags(artists: string[], max = 5): string {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const a of artists) {

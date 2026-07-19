@@ -13,8 +13,8 @@ interface TabsProps {
   style?: React.CSSProperties;
 }
 
-// Top navigation where the active tab is a soft filled coral pill (not an
-// underline), sitting in a quiet track.
+// Top navigation, Terminal-Core: активная вкладка — белый текст в рамке-боксе,
+// без скруглений и заливки. Остальные — приглушённый серый.
 export function Tabs({ tabs, value, onChange, style = {} }: TabsProps) {
   return (
     <div
@@ -22,9 +22,9 @@ export function Tabs({ tabs, value, onChange, style = {} }: TabsProps) {
         display: "inline-flex",
         alignItems: "center",
         gap: "4px",
-        padding: "5px",
-        background: "var(--surface-1)",
-        borderRadius: "var(--radius-pill)",
+        padding: 0,
+        background: "transparent",
+        borderRadius: 0,
         ...style,
       }}
     >
@@ -58,15 +58,17 @@ function TabPill({
         display: "inline-flex",
         alignItems: "center",
         gap: "8px",
-        padding: "9px 18px",
-        border: "none",
-        borderRadius: "var(--radius-pill)",
+        padding: "8px 16px",
+        border: active ? "1px solid var(--border-strong)" : "1px solid transparent",
+        borderRadius: 0,
         cursor: "pointer",
-        fontFamily: "var(--font-sans)",
+        fontFamily: "var(--font-mono)",
         fontSize: "var(--fs-sm)",
+        textTransform: "uppercase",
+        letterSpacing: "0.06em",
         fontWeight: (active ? "var(--fw-semibold)" : "var(--fw-medium)") as any,
-        background: active ? "var(--accent-soft)" : hover ? "var(--surface-3)" : "transparent",
-        color: active ? "var(--accent)" : hover ? "var(--text-body)" : "var(--text-muted)",
+        background: active ? "var(--surface-3)" : hover ? "var(--surface-2)" : "transparent",
+        color: active ? "var(--text-strong)" : hover ? "var(--text-body)" : "var(--text-muted)",
         transition: "var(--transition-base)",
         whiteSpace: "nowrap",
       }}

@@ -121,28 +121,29 @@ function CleanTopBar({ tabs, active, onChange }: TopBarProps) {
       <div style={{ display: "flex", alignItems: "center", gap: 11, width: 200 }}>
         <span
           style={{
-            width: 38, height: 38,
-            borderRadius: "var(--radius-md)",
-            background: "var(--accent-soft)",
-            color: "var(--accent)",
+            width: 34, height: 34,
+            borderRadius: 0,
+            background: "transparent",
+            border: "1px solid var(--border-medium)",
+            color: "var(--text-strong)",
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
             flexShrink: 0,
           }}
         >
-          <Icons.Wave width={20} height={20} />
+          <Icons.Wave width={18} height={18} />
         </span>
         <span
           style={{
             fontSize: "var(--fs-h2)",
             fontWeight: "var(--fw-semibold)" as any,
-            letterSpacing: "var(--ls-tight)",
+            letterSpacing: "0.02em",
             color: "var(--text-strong)",
             whiteSpace: "nowrap",
           }}
         >
-          Flapp
+          flapp<span style={{ color: "var(--text-faint)" }}>_</span>
         </span>
       </div>
 

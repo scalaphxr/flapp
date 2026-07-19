@@ -16,17 +16,40 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 )
 
-// FindFFmpeg returns the ffmpeg executable to use: the configured path if it
-// exists, otherwise a PATH lookup, otherwise common Windows install locations.
+// ffmpegNextTo returns the bundled ffmpeg.exe sitting in dir, if present. В
+// установленном приложении Tauri кладёт externalBin (и сайдкар, и ffmpeg) рядом
+// с главным exe, поэтому вшитый ffmpeg лежит в одной папке с сайдкаром.
+func ffmpegNextTo(dir string) (string, bool) {
+	name := "ffmpeg"
+	if runtime.GOOS == "windows" {
+		name = "ffmpeg.exe"
+	}
+	cand := filepath.Join(dir, name)
+	if st, err := os.Stat(cand); err == nil && !st.IsDir() {
+		return cand, true
+	}
+	return "", false
+}
+
+// FindFFmpeg returns the ffmpeg executable to use: the configured override first,
+// then the copy bundled next to the sidecar (shipped with the installer), then a
+// PATH lookup, then common Windows install locations.
 func FindFFmpeg(configured string) (string, error) {
 	if configured != "" {
 		if st, err := os.Stat(configured); err == nil && !st.IsDir() {
 			return configured, nil
+		}
+	}
+	// Вшитый в установку ffmpeg — рядом с исполняемым файлом сайдкара.
+	if exe, err := os.Executable(); err == nil {
+		if p, ok := ffmpegNextTo(filepath.Dir(exe)); ok {
+			return p, nil
 		}
 	}
 	if p, err := exec.LookPath("ffmpeg"); err == nil {
@@ -256,35 +279,64 @@ func escFilterPath(p string) string {
 	return p
 }
 
-// RenderStill builds an H.264/AAC MP4 from one cover image and one audio
-// track: обложка 1080p с сохранением пропорций, фон — размытая копия самой
-// картинки (вертикальные обложки не оставляют чёрных полос), 2 fps (для
-// статичной картинки больше не нужно), длительность по аудио (-shortest).
-// Опционально наносит название бита (в кавычках) и ник автора помельче.
-// Прогресс считается из -progress pipe:1 (out_time_us) против длительности,
-// которую ffmpeg сам печатает в баннере stderr.
-func RenderStill(ctx context.Context, ffmpeg, imagePath, audioPath, outPath string, opts RenderOpts, progress func(float64)) error {
-	chain := "[0:v]split[bg][fg];" +
+// ErrFontMissing reports a font that the caller named explicitly but which is
+// not on disk. Рендер в этом случае откатился бы на дефолт молча, и выбранный
+// шрифт «просто не применился» — поэтому вызывающий узнаёт об этом явно.
+var ErrFontMissing = errors.New("файл шрифта не найден")
+
+// ValidateFont checks that an explicitly named font (key or path) resolves to a
+// real file. Пустая строка — это «дефолт», она валидна всегда.
+func ValidateFont(font string) error {
+	if font == "" {
+		return nil
+	}
+	if existingFont(font) {
+		return nil
+	}
+	if pair, has := FontFiles[strings.ToLower(font)]; has && existingFont(pair[0]) {
+		return nil
+	}
+	return fmt.Errorf("%w: %s", ErrFontMissing, font)
+}
+
+// buildChain assembles the filtergraph shared by RenderStill and RenderFrame:
+// обложка 1080p с сохранением пропорций, фон — размытая копия самой картинки
+// (вертикальные обложки не оставляют чёрных полос), опционально название бита
+// и ник автора помельче поверх кадра.
+//
+// Это единственное место, где задана геометрия кадра: и видео, и превью-кадр
+// строятся отсюда, поэтому разъехаться они не могут.
+//
+// Текст пишем во временные файлы (textfile=): так контент не приходится
+// экранировать под парсер filtergraph. Их удаляет возвращённый cleanup —
+// вызывать обязательно, даже если рендер завершился ошибкой.
+func buildChain(opts RenderOpts, tmpPrefix string) (chain string, cleanup func()) {
+	var tmps []string
+	cleanup = func() {
+		for _, p := range tmps {
+			os.Remove(p)
+		}
+	}
+
+	chain = "[0:v]split[bg][fg];" +
 		"[bg]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,gblur=sigma=28,eq=brightness=-0.08[b];" +
 		"[fg]scale=1920:1080:force_original_aspect_ratio=decrease[f];" +
 		"[b][f]overlay=(W-w)/2:(H-h)/2,format=yuv420p"
 
-	// Текст пишем во временные файлы (textfile=): так контент не приходится
-	// экранировать под парсер filtergraph. Файлы удаляем после рендера.
 	if opts.Overlay {
 		if bold, reg, ok := resolveFont(opts.Font); ok {
 			if opts.TitleText != "" {
-				tf := outPath + ".title.txt"
+				tf := tmpPrefix + ".title.txt"
 				if err := os.WriteFile(tf, []byte(opts.TitleText), 0o644); err == nil {
-					defer os.Remove(tf)
+					tmps = append(tmps, tf)
 					chain += fmt.Sprintf(",drawtext=fontfile='%s':textfile='%s':fontcolor=white:fontsize=92:x=(w-text_w)/2:y=h*0.70:shadowcolor=black@0.7:shadowx=3:shadowy=3",
 						escFilterPath(bold), escFilterPath(tf))
 				}
 			}
 			if opts.SubText != "" {
-				sf := outPath + ".sub.txt"
+				sf := tmpPrefix + ".sub.txt"
 				if err := os.WriteFile(sf, []byte(opts.SubText), 0o644); err == nil {
-					defer os.Remove(sf)
+					tmps = append(tmps, sf)
 					chain += fmt.Sprintf(",drawtext=fontfile='%s':textfile='%s':fontcolor=white@0.9:fontsize=46:x=(w-text_w)/2:y=h*0.70+120:shadowcolor=black@0.7:shadowx=2:shadowy=2",
 						escFilterPath(reg), escFilterPath(sf))
 				}
@@ -292,6 +344,67 @@ func RenderStill(ctx context.Context, ffmpeg, imagePath, audioPath, outPath stri
 		}
 	}
 	chain += "[v]"
+	return chain, cleanup
+}
+
+// RenderFrame renders a single 1920x1080 PNG through the very same filtergraph
+// as the final video — это и есть превью кадра в UI. Аудио не нужно, поэтому
+// кадр можно показать ещё до выбора трека.
+func RenderFrame(ctx context.Context, ffmpeg, imagePath, outPath string, opts RenderOpts) error {
+	if opts.Overlay {
+		if err := ValidateFont(opts.Font); err != nil {
+			return err
+		}
+	}
+
+	chain, cleanup := buildChain(opts, outPath)
+	defer cleanup()
+
+	// Превью показывается в панели ~300px шириной, поэтому полноразмерный кадр
+	// 1920×1080 избыточен: он лишь дольше кодируется в PNG и читается в webview.
+	// Равномерный даунскейл готового кадра до 960×540 сохраняет ту же геометрию
+	// (текст рисуется в полном размере и уменьшается вместе со всем), но вдвое
+	// легче — так переключение между битами ощутимо быстрее.
+	chain = strings.TrimSuffix(chain, "[v]") + ",scale=960:540[v]"
+
+	args := []string{
+		"-y", "-hide_banner",
+		"-i", imagePath,
+		"-filter_complex", chain,
+		"-map", "[v]", "-frames:v", "1",
+		"-nostats", outPath,
+	}
+	cmd := exec.CommandContext(ctx, ffmpeg, args...)
+	hideWindow(cmd)
+
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		msg := strings.TrimSpace(string(out))
+		if len(msg) > 600 {
+			msg = msg[len(msg)-600:]
+		}
+		return fmt.Errorf("ffmpeg: %w: %s", err, msg)
+	}
+	return nil
+}
+
+// RenderStill builds an H.264/AAC MP4 from one cover image and one audio
+// track: кадр строит buildChain (тот же, что и для превью), 2 fps (для
+// статичной картинки больше не нужно), длительность по аудио (-shortest).
+// Прогресс считается из -progress pipe:1 (out_time_us) против длительности,
+// которую ffmpeg сам печатает в баннере stderr.
+func RenderStill(ctx context.Context, ffmpeg, imagePath, audioPath, outPath string, opts RenderOpts, progress func(float64)) error {
+	if opts.Overlay {
+		if err := ValidateFont(opts.Font); err != nil {
+			return err
+		}
+	}
+
+	chain, cleanup := buildChain(opts, outPath)
+	defer cleanup()
 
 	args := []string{
 		"-y", "-hide_banner",

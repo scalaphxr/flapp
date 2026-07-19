@@ -208,7 +208,7 @@ export const en: Dict = {
     ytAuthorsEditTip: "Click to rename (remembered)",
     ytAuthorsNickTip: "Your nick from settings — always first",
     ytTitleTemplate: "Title template",
-    ytTemplateHint: "Placeholders: {name} — title (no BPM/authors/nick), {type} — type, {bpm}, {key}, {nick} — your tag, {authors} — all authors",
+    ytTemplateHint: "Placeholders: {name} — title (no BPM/authors/nick), {type} — type, {bpm}, {key}, {nick} — your tag, {authors} — all authors, {year} — current year",
     ytTplCustom: "— custom template —",
     ytTplSave: "Save template as preset",
     ytTplDelete: "Remove template from presets",
