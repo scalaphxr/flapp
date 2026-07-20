@@ -1,6 +1,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use eframe::egui;
 
+// Settings API is scaffolding for later sub-projects; the Foundation doesn't
+// read/write settings yet.
+#[allow(dead_code)]
+mod settings;
 mod tabs;
 mod theme;
 
