@@ -6,6 +6,7 @@ frontend/node_modules/
 frontend/dist/
 src-tauri/target/
 src-tauri/gen/
+native/target/
 
 # compiled Go sidecar (rebuild with scripts/build-sidecar.sh)
 src-tauri/binaries/*
