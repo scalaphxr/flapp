@@ -803,3 +803,26 @@ git commit -m "feat(app): settings load/save compatible with existing settings.j
 - Settings compatible with existing json, SQLite deferred → Task 7. ✓
 - "Old app keeps working" hard gate → Task 3 Step 4. ✓
 - Out-of-scope (tab content, SQLite, watcher, YouTube/covers, packaging) → not included. ✓
+
+---
+
+## Execution outcome (2026-07-20)
+
+**Status: COMPLETE.** All 7 tasks implemented, committed `691aa7d..3dc5214`. Full
+workspace `cargo test` = 13 passing (7 dsp + 3 audio + 3 app; 1 dsp test `#[ignore]`d
+manual eval). Old Tauri app still compiles against `flapp-dsp` (Task 3 gate, 43s build).
+Not run: the interactive window smoke and full `npm run dev` click-test (GUI is blocking;
+executed autonomously overnight). Correctness rests on compilation + unit tests + the
+verbatim DSP move.
+
+### API deltas vs the plan's original snippets (pinned versions differ from assumptions)
+
+These were resolved during execution — **use these in the Player sub-project**:
+
+- **eframe/egui pinned at 0.35.0.** The `App` trait method is **`fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame)`**, NOT `update(ctx, frame)`. The `Ui` has no background — wrap content in a panel.
+- **Panels take `&mut Ui` and nest via `.show(ui, …)`** inside `App::ui` (not `.show(ctx, …)`).
+- **`TopBottomPanel`/`SidePanel` were unified into `egui::Panel`** — use `egui::Panel::top("id")`, `Panel::bottom/left/right`. `egui::CentralPanel` still exists.
+- **rodio pinned at 0.20** (classic `OutputStream::try_default()` + `Sink` + `try_seek`). rodio 0.22 is a large reorg (no `Sink`); avoided for the Foundation.
+- **`flapp-dsp` public API** (for the Player tab): `analyze_one(&str) -> AudioMeta`, `probe_quick(&str) -> AudioMeta`, `scan_dir_recursive(&str, &mut Vec<String>)`, `encode_wav(&[f32], u32, u32) -> Vec<u8>`, `AnalyzerCache::{new, get, set}`, `AudioMeta` (serde camelCase; `peaks: Vec<f32>` 4096 pts, `bpm`, `key`, `duration_s`, …).
+- **`flapp-audio` API:** `Player::{new, play(&Path, duration_sec), pause, resume, stop, seek(f32), position()->f32, is_playing}`; `PositionTracker` for the playhead. Position/seek are scaled by the probed `duration_s` from `flapp-dsp` (VBR-mp3 gotcha).
+- **theme:** `theme::WAVE_DIM` (#666) is the waveform base colour, ready for the Player painter.
