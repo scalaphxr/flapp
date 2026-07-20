@@ -1,7 +1,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use eframe::egui;
 
+mod tabs;
 mod theme;
+
+use tabs::{PlayerTabState, SettingsTabState, SoundsTabState, Tab};
 
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
@@ -15,19 +18,47 @@ fn main() -> eframe::Result {
         options,
         Box::new(|cc| {
             theme::install_theme(&cc.egui_ctx);
-            Ok(Box::<FlappApp>::default())
+            Ok(Box::new(FlappApp::new()))
         }),
     )
 }
 
-#[derive(Default)]
-struct FlappApp {}
+/// Root app state. Held across frames by eframe (retained) — so each tab keeps
+/// its own state when you switch away and back.
+struct FlappApp {
+    tab: Tab,
+    sounds: SoundsTabState,
+    player: PlayerTabState,
+    settings: SettingsTabState,
+    audio: flapp_audio::Player,
+}
+
+impl FlappApp {
+    fn new() -> Self {
+        Self {
+            tab: Tab::Sounds,
+            sounds: SoundsTabState::default(),
+            player: PlayerTabState::default(),
+            settings: SettingsTabState::default(),
+            audio: flapp_audio::Player::new().expect("audio output device"),
+        }
+    }
+}
 
 impl eframe::App for FlappApp {
-    // eframe 0.35: App::ui hands a background-less Ui; wrap content in a panel.
+    // eframe 0.35: App::ui hands a background-less Ui; nest panels via show(ui, …).
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        egui::CentralPanel::default().show(ui, |ui| {
-            ui.label("Flapp native — scaffold");
+        egui::Panel::top("tabs").show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.selectable_value(&mut self.tab, Tab::Sounds, "SOUNDS");
+                ui.selectable_value(&mut self.tab, Tab::Player, "PLAYER");
+                ui.selectable_value(&mut self.tab, Tab::Settings, "SETTINGS");
+            });
+        });
+        egui::CentralPanel::default().show(ui, |ui| match self.tab {
+            Tab::Sounds => self.sounds.ui(ui),
+            Tab::Player => self.player.ui(ui, &mut self.audio),
+            Tab::Settings => self.settings.ui(ui),
         });
     }
 }
