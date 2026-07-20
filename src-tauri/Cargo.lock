@@ -872,6 +872,7 @@ name = "flapp"
 version = "0.2.0"
 dependencies = [
  "ebur128",
+ "flapp-dsp",
  "notify",
  "rayon",
  "rustfft",
@@ -883,6 +884,16 @@ dependencies = [
  "tauri-plugin-dialog",
  "tauri-plugin-drag",
  "tauri-plugin-shell",
+]
+
+[[package]]
+name = "flapp-dsp"
+version = "0.1.0"
+dependencies = [
+ "rustfft",
+ "serde",
+ "serde_json",
+ "symphonia",
 ]
 
 [[package]]

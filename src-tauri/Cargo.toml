@@ -35,6 +35,8 @@ rayon     = "1"
 tauri-plugin-drag = "2.1.1"
 # Live-слежение за папками плеера (ReadDirectoryChangesW на Windows).
 notify    = "8"
+# Чистый DSP-крейт нативного рерайта; analyzer.rs — тонкая Tauri-обёртка над ним.
+flapp-dsp = { path = "../native/flapp-dsp" }
 
 [profile.dev]
 debug = 0
