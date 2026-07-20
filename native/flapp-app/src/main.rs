@@ -1,6 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use eframe::egui;
 
+mod theme;
+
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -11,7 +13,10 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "Flapp",
         options,
-        Box::new(|_cc| Ok(Box::<FlappApp>::default())),
+        Box::new(|cc| {
+            theme::install_theme(&cc.egui_ctx);
+            Ok(Box::<FlappApp>::default())
+        }),
     )
 }
 
