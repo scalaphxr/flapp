@@ -3,12 +3,14 @@ use eframe::egui;
 
 // Settings API is scaffolding for later sub-projects; the Foundation doesn't
 // read/write settings yet.
+mod player;
 #[allow(dead_code)]
 mod settings;
 mod tabs;
 mod theme;
 
-use tabs::{PlayerTabState, SettingsTabState, SoundsTabState, Tab};
+use player::PlayerTabState;
+use tabs::{SettingsTabState, SoundsTabState, Tab};
 
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {

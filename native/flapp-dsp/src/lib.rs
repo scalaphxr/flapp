@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
 
 // ── Типы ─────────────────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AudioMeta {
     pub path: String,
