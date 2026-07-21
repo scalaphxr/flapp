@@ -50,6 +50,11 @@ pub struct AudioMeta {
     /// true — быстрые метаданные из заголовка; DSP (пики/BPM/key) ещё идёт.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub partial: Option<bool>,
+    /// Перцептивный отпечаток (496-бит hex) для акустического дедупа; пусто у
+    /// partial-строк и при ошибке анализа. `#[serde(default)]` — совместимость
+    /// со старым дисковым кэшем.
+    #[serde(default)]
+    pub fingerprint: String,
 }
 
 
@@ -896,6 +901,7 @@ pub fn probe_quick(path: &str) -> AudioMeta {
         created_at,
         error,
         partial: Some(true),
+        fingerprint: String::new(),
     }
 }
 
@@ -922,7 +928,7 @@ pub fn analyze_one(path: &str) -> AudioMeta {
             format: String::new(), duration_s: 0.0, sample_rate: 0, channels: 0,
             bit_depth: None, file_size_bytes, lufs: None, peak_dbfs: None,
             bpm: None, key: None, key_confidence: None, peaks: vec![],
-            created_at, error: Some(e), partial: None,
+            created_at, error: Some(e), partial: None, fingerprint: String::new(),
         },
     };
 
@@ -951,6 +957,9 @@ pub fn analyze_one(path: &str) -> AudioMeta {
     // 3b. Тональность — HPCP по всему буферу.
     let (key, key_confidence) = detect_key(dsp, dsp_sr);
 
+    // 3c. Перцептивный отпечаток для акустического дедупа (тот же моно-буфер).
+    let fp = fingerprint(dsp, dsp_sr);
+
     // Явный BPM в имени файла — самый надёжный источник: продюсеры подписывают
     // темп («Beat 140bpm», «trap_155_dark»), а DSP-оценка на халфтайм-битах
     // склонна к октавным ошибкам. Имя переопределяет анализ.
@@ -974,6 +983,7 @@ pub fn analyze_one(path: &str) -> AudioMeta {
         created_at,
         error: None,
         partial: None,
+        fingerprint: fp,
     }
 }
 
@@ -1028,6 +1038,194 @@ pub fn profile_one(path: &str) -> PhaseMs {
     t.key = s.elapsed().as_secs_f64() * 1000.0;
 
     t
+}
+
+// ── Перцептивный отпечаток (акустический дедуп) ───────────────────────────────
+
+const FP_TIME_BINS: usize = 16;
+const FP_BANDS: usize = 32;
+
+/// 496-битный перцептивный отпечаток моно-буфера: 16 временных сегментов ×
+/// сравнение 32 лог-полос спектра (band[b] > band[b+1] → бит). Инвариантен к
+/// усилению (сравнение соседних полос + монотонность log1p), устойчив к
+/// ре-энкоду; близость измеряется расстоянием Хэмминга. Порт audio.perceptualHash.
+pub fn fingerprint(mono: &[f32], sr: u32) -> String {
+    use rustfft::{num_complex::Complex, FftPlanner};
+    if mono.is_empty() || sr == 0 {
+        return String::new();
+    }
+    let mut seg_len = mono.len() / FP_TIME_BINS;
+    if seg_len < 64 {
+        seg_len = mono.len();
+    }
+    let win = next_pow2(seg_len).min(8192);
+    if win == 0 {
+        return String::new();
+    }
+    let w = hann(win);
+    let mut planner = FftPlanner::<f32>::new();
+    let fft = planner.plan_fft_forward(win);
+    let mut buf = vec![Complex::new(0.0f32, 0.0); win];
+    let mut grid = vec![[0f64; FP_BANDS]; FP_TIME_BINS];
+
+    for (t, row) in grid.iter_mut().enumerate() {
+        let mut start = t * seg_len;
+        if start + win > mono.len() {
+            start = mono.len().saturating_sub(win);
+        }
+        for c in buf.iter_mut() {
+            *c = Complex::new(0.0, 0.0);
+        }
+        let end = (start + win).min(mono.len());
+        for i in 0..end - start {
+            buf[i].re = mono[start + i] * w[i] as f32;
+        }
+        fft.process(&mut buf);
+        log_bands_into(&buf, win, sr, row);
+    }
+
+    let total_bits = FP_TIME_BINS * (FP_BANDS - 1);
+    let mut bits = vec![0u8; total_bits.div_ceil(8)];
+    let mut bit_idx = 0;
+    for row in &grid {
+        for b in 0..FP_BANDS - 1 {
+            if row[b] > row[b + 1] {
+                bits[bit_idx / 8] |= 1 << (bit_idx % 8);
+            }
+            bit_idx += 1;
+        }
+    }
+    to_hex(&bits)
+}
+
+fn log_bands_into(spec: &[rustfft::num_complex::Complex<f32>], win: usize, sr: u32, dst: &mut [f64; FP_BANDS]) {
+    let n = dst.len();
+    let half = win / 2;
+    let min_f = 80.0f64;
+    let mut max_f = sr as f64 / 2.0;
+    if max_f <= min_f {
+        max_f = min_f * 2.0;
+    }
+    let log_min = min_f.ln();
+    let log_max = max_f.ln();
+    let bin_hz = sr as f64 / win as f64;
+    for v in dst.iter_mut() {
+        *v = 0.0;
+    }
+    for k in 1..half {
+        let freq = k as f64 * bin_hz;
+        if freq < min_f || freq > max_f {
+            continue;
+        }
+        let mag = (spec[k].re as f64).hypot(spec[k].im as f64);
+        let mut idx = (n as f64 * (freq.ln() - log_min) / (log_max - log_min)) as isize;
+        idx = idx.clamp(0, n as isize - 1);
+        dst[idx as usize] += mag * mag;
+    }
+    for v in dst.iter_mut() {
+        *v = (1.0 + *v).ln();
+    }
+}
+
+fn next_pow2(n: usize) -> usize {
+    let mut p = 1usize;
+    while p < n {
+        p <<= 1;
+    }
+    p
+}
+
+fn hann(n: usize) -> Vec<f64> {
+    if n <= 1 {
+        return vec![1.0; n.max(1)];
+    }
+    (0..n)
+        .map(|i| 0.5 - 0.5 * (2.0 * std::f64::consts::PI * i as f64 / (n as f64 - 1.0)).cos())
+        .collect()
+}
+
+/// Расстояние Хэмминга между двумя hex-отпечатками равной длины; -1 если
+/// несопоставимы (пустые или разной длины). Порт audio.HammingHex.
+pub fn hamming_hex(a: &str, b: &str) -> i32 {
+    if a.is_empty() || b.is_empty() || a.len() != b.len() {
+        return -1;
+    }
+    let (Some(ab), Some(bb)) = (from_hex(a), from_hex(b)) else {
+        return -1;
+    };
+    ab.iter().zip(&bb).map(|(x, y)| (x ^ y).count_ones() as i32).sum()
+}
+
+fn to_hex(bytes: &[u8]) -> String {
+    const H: &[u8; 16] = b"0123456789abcdef";
+    let mut s = String::with_capacity(bytes.len() * 2);
+    for &b in bytes {
+        s.push(H[(b >> 4) as usize] as char);
+        s.push(H[(b & 0xf) as usize] as char);
+    }
+    s
+}
+
+fn from_hex(s: &str) -> Option<Vec<u8>> {
+    if s.len() % 2 != 0 {
+        return None;
+    }
+    let b = s.as_bytes();
+    let val = |c: u8| -> Option<u8> {
+        match c {
+            b'0'..=b'9' => Some(c - b'0'),
+            b'a'..=b'f' => Some(c - b'a' + 10),
+            b'A'..=b'F' => Some(c - b'A' + 10),
+            _ => None,
+        }
+    };
+    let mut out = Vec::with_capacity(s.len() / 2);
+    let mut i = 0;
+    while i < b.len() {
+        out.push((val(b[i])? << 4) | val(b[i + 1])?);
+        i += 2;
+    }
+    Some(out)
+}
+
+#[cfg(test)]
+mod fp_tests {
+    use super::*;
+
+    #[test]
+    fn hamming_hex_basics() {
+        assert_eq!(hamming_hex("ff", "ff"), 0);
+        assert_eq!(hamming_hex("ff", "fe"), 1);
+        assert_eq!(hamming_hex("00", "ff"), 8);
+        assert_eq!(hamming_hex("", "ff"), -1);
+        assert_eq!(hamming_hex("ff", "ffff"), -1); // length mismatch
+    }
+
+    fn sine(f: f32, sr: u32, n: usize) -> Vec<f32> {
+        (0..n)
+            .map(|i| (2.0 * std::f32::consts::PI * f * i as f32 / sr as f32).sin())
+            .collect()
+    }
+
+    #[test]
+    fn fingerprint_deterministic_gain_invariant_and_discriminative() {
+        let sr = 11025u32;
+        let a = sine(440.0, sr, sr as usize * 3);
+        let fp_a = fingerprint(&a, sr);
+        assert_eq!(fp_a.len(), 124); // 496 bits = 62 bytes = 124 hex chars
+
+        // Identical input → distance 0.
+        assert_eq!(hamming_hex(&fp_a, &fingerprint(&a, sr)), 0);
+
+        // Gain change → comparative bands + monotone log1p → still 0.
+        let quiet: Vec<f32> = a.iter().map(|s| s * 0.3).collect();
+        assert_eq!(hamming_hex(&fp_a, &fingerprint(&quiet, sr)), 0);
+
+        // Clearly different tone → large distance.
+        let b = sine(1500.0, sr, sr as usize * 3);
+        let d = hamming_hex(&fp_a, &fingerprint(&b, sr));
+        assert!(d > 20, "distinct tones should differ, got {d}");
+    }
 }
 
 // ── Кодирование WAV (для player_decode_to_wav) ────────────────────────────────
