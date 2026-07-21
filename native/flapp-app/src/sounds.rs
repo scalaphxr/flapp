@@ -1,7 +1,7 @@
 // Вкладка Sounds: библиотека сэмплов. Подбор папки → сканирование → имя-
-// классификация (порт classify.rs) + анализ через flapp-dsp → фильтр по
-// категории + текстовый поиск + воспроизведение. Порт архивов/.flp/дедупа —
-// отдельные будущие заходы (см. статус рерайта).
+// классификация (порт classify.rs) + анализ через flapp-dsp → дедуп (точный +
+// акустический) → фильтр по категории + поиск + воспроизведение. Порт
+// архивов/.flp/MIDI — отдельные будущие заходы.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -16,11 +16,21 @@ use flapp_audio::Player;
 use flapp_dsp::{analyze_one, probe_quick, scan_dir_recursive, AnalyzerCache, AudioMeta};
 
 use crate::classify::{classify_by_name, Category};
+use crate::dedup::{quick_hash, DedupIndex, DupKind};
 use crate::util::fmt_time;
+
+/// Одно сообщение анализа: метаданные + контент-хэш (для точного дедупа).
+/// Хэш пуст на быстрой стадии, заполняется на полной.
+struct SoundMsg {
+    meta: AudioMeta,
+    content_hash: String,
+}
 
 struct Sample {
     meta: AudioMeta,
     category: Category,
+    content_hash: String,
+    dup: DupKind,
 }
 
 pub struct SoundsTabState {
@@ -28,11 +38,15 @@ pub struct SoundsTabState {
     samples: Vec<Sample>,
     index: HashMap<String, usize>,
     cache: Arc<AnalyzerCache>,
-    rx: Option<Receiver<AudioMeta>>,
+    rx: Option<Receiver<SoundMsg>>,
     filter: Option<Category>, // None = All
     search: String,
     selected: Option<usize>,
     playing: Option<String>,
+    deep_dedup: bool,
+    hide_dupes: bool,
+    dedup_dirty: bool,
+    dup_count: usize,
 }
 
 impl Default for SoundsTabState {
@@ -48,6 +62,10 @@ impl Default for SoundsTabState {
             search: String::new(),
             selected: None,
             playing: None,
+            deep_dedup: true,
+            hide_dupes: false,
+            dedup_dirty: false,
+            dup_count: 0,
         }
     }
 }
@@ -67,9 +85,11 @@ impl SoundsTabState {
         self.samples.clear();
         self.index.clear();
         self.selected = None;
+        self.dup_count = 0;
+        self.dedup_dirty = false;
         self.folder = Some(dir.clone());
 
-        let (tx, rx) = channel::<AudioMeta>();
+        let (tx, rx) = channel::<SoundMsg>();
         self.rx = Some(rx);
         let cache = self.cache.clone();
 
@@ -78,9 +98,11 @@ impl SoundsTabState {
             let mut paths: Vec<String> = Vec::new();
             scan_dir_recursive(&dir.to_string_lossy(), &mut paths);
             paths.sort();
+            // Стадия 1: мгновенные заголовки (хэш ещё не считаем).
             paths.par_iter().for_each_with(tx.clone(), |s, p| {
-                let _ = s.send(probe_quick(p));
+                let _ = s.send(SoundMsg { meta: probe_quick(p), content_hash: String::new() });
             });
+            // Стадия 2: полный анализ + контент-хэш для дедупа.
             paths.par_iter().for_each_with(tx.clone(), |s, p| {
                 let meta = if let Some(m) = cache.get(p) {
                     m
@@ -89,12 +111,14 @@ impl SoundsTabState {
                     cache.set(p, m.clone());
                     m
                 };
-                let _ = s.send(meta);
+                let content_hash = quick_hash(std::path::Path::new(p)).unwrap_or_default();
+                let _ = s.send(SoundMsg { meta, content_hash });
             });
         });
     }
 
-    fn merge(&mut self, meta: AudioMeta) {
+    fn merge(&mut self, msg: SoundMsg) {
+        let SoundMsg { meta, content_hash } = msg;
         let category = classify_by_name(&meta.name, &meta.path)
             .map(|(c, _)| c)
             .unwrap_or(Category::Fx);
@@ -103,14 +127,58 @@ impl SoundsTabState {
                 let existing_full = self.samples[i].meta.partial != Some(true);
                 let incoming_quick = meta.partial == Some(true);
                 if !(existing_full && incoming_quick) {
-                    self.samples[i] = Sample { meta, category };
+                    self.samples[i].meta = meta;
+                    self.samples[i].category = category;
+                    if !content_hash.is_empty() {
+                        self.samples[i].content_hash = content_hash;
+                    }
                 }
             }
             None => {
                 self.index.insert(meta.path.clone(), self.samples.len());
-                self.samples.push(Sample { meta, category });
+                self.samples.push(Sample { meta, category, content_hash, dup: DupKind::Unique });
             }
         }
+        self.dedup_dirty = true;
+    }
+
+    /// Детерминированный проход дедупа по всем полностью проанализированным
+    /// сэмплам (порядок — по пути). Порт логики harvest+index: точный дубль по
+    /// контент-хэшу; акустический — при близости отпечатка И совпадении имени.
+    fn recompute_dedup(&mut self) {
+        let mut order: Vec<usize> = (0..self.samples.len()).collect();
+        order.sort_by(|&a, &b| self.samples[a].meta.path.cmp(&self.samples[b].meta.path));
+
+        let mut ix = DedupIndex::new(self.deep_dedup, 0);
+        let mut dups = 0usize;
+        for &i in &order {
+            // Пока не проанализирован полностью — считаем уникальным (не решаем).
+            if self.samples[i].meta.partial == Some(true) {
+                self.samples[i].dup = DupKind::Unique;
+                continue;
+            }
+            let (name, hash, fp) = {
+                let s = &self.samples[i];
+                (s.meta.name.clone(), s.content_hash.clone(), s.meta.fingerprint.clone())
+            };
+            let (kind, existing) = ix.check(&hash, &fp, &name);
+            let is_dup = match kind {
+                DupKind::Exact => true,
+                // Акустический — вероятностный: требуем ещё совпадения имени.
+                DupKind::Acoustic => existing
+                    .as_deref()
+                    .is_some_and(|e| e.eq_ignore_ascii_case(&name)),
+                DupKind::Unique => false,
+            };
+            if is_dup {
+                self.samples[i].dup = kind;
+                dups += 1;
+            } else {
+                self.samples[i].dup = DupKind::Unique;
+                ix.add(&hash, &fp, &name);
+            }
+        }
+        self.dup_count = dups;
     }
 
     fn drain(&mut self, ctx: &egui::Context) {
@@ -131,14 +199,19 @@ impl SoundsTabState {
         if got {
             ctx.request_repaint();
         }
+        // Когда анализ устоялся — один раз пересчитываем дедуп.
+        if self.dedup_dirty && self.pending() == 0 && !self.samples.is_empty() {
+            self.recompute_dedup();
+            self.dedup_dirty = false;
+        }
     }
 
-    /// Indices of samples passing the category filter + text search.
     fn visible(&self) -> Vec<usize> {
         let q = self.search.to_ascii_lowercase();
         self.samples
             .iter()
             .enumerate()
+            .filter(|(_, s)| !(self.hide_dupes && s.dup != DupKind::Unique))
             .filter(|(_, s)| self.filter.is_none_or(|f| s.category == f))
             .filter(|(_, s)| q.is_empty() || s.meta.name.to_ascii_lowercase().contains(&q))
             .map(|(i, _)| i)
@@ -174,10 +247,11 @@ impl SoundsTabState {
             if pending > 0 {
                 ui.add(egui::Spinner::new());
                 ui.label(format!("analyzing… {}/{}", total - pending, total));
+            } else if self.dup_count > 0 {
+                ui.label(egui::RichText::new(format!("· {} duplicates", self.dup_count)).weak());
             }
         });
 
-        // Category filter chips.
         ui.horizontal_wrapped(|ui| {
             if ui.selectable_label(self.filter.is_none(), "All").clicked() {
                 self.filter = None;
@@ -194,6 +268,11 @@ impl SoundsTabState {
             ui.text_edit_singleline(&mut self.search);
             if !self.search.is_empty() && ui.button("✕").clicked() {
                 self.search.clear();
+            }
+            ui.separator();
+            ui.checkbox(&mut self.hide_dupes, "Hide dupes");
+            if ui.checkbox(&mut self.deep_dedup, "Acoustic").changed() {
+                self.dedup_dirty = true; // пересчитать при смене режима
             }
         });
         ui.separator();
@@ -230,12 +309,21 @@ impl SoundsTabState {
                     let si = rows[row.index()];
                     let s = &samples[si];
                     let is_playing = playing_path.as_deref() == Some(s.meta.path.as_str());
+                    let is_dup = s.dup != DupKind::Unique;
                     row.col(|ui| { ui.label(s.category.label()); });
                     let (_, resp) = row.col(|ui| {
-                        let label = egui::RichText::new(&s.meta.name);
-                        let label = if is_playing { label.color(egui::Color32::WHITE).strong() } else { label };
+                        let mut label = egui::RichText::new(&s.meta.name);
+                        if is_playing {
+                            label = label.color(egui::Color32::WHITE).strong();
+                        } else if is_dup {
+                            label = label.weak(); // дубли приглушены
+                        }
                         if ui.add(egui::Label::new(label).truncate().sense(egui::Sense::click())).clicked() {
                             play_request = Some(si);
+                        }
+                        if is_dup {
+                            let tag = if s.dup == DupKind::Exact { "=dup" } else { "≈dup" };
+                            ui.label(egui::RichText::new(tag).small().weak());
                         }
                     });
                     if resp.clicked() {
@@ -259,8 +347,23 @@ impl SoundsTabState {
 mod tests {
     use super::*;
 
-    fn quick(path: &str, name: &str) -> AudioMeta {
-        AudioMeta { path: path.into(), name: name.into(), partial: Some(true), ..Default::default() }
+    fn quick(path: &str, name: &str) -> SoundMsg {
+        SoundMsg {
+            meta: AudioMeta { path: path.into(), name: name.into(), partial: Some(true), ..Default::default() },
+            content_hash: String::new(),
+        }
+    }
+    fn full(path: &str, name: &str, hash: &str, fp: &str) -> SoundMsg {
+        SoundMsg {
+            meta: AudioMeta {
+                path: path.into(),
+                name: name.into(),
+                partial: None,
+                fingerprint: fp.into(),
+                ..Default::default()
+            },
+            content_hash: hash.into(),
+        }
     }
 
     #[test]
@@ -270,19 +373,35 @@ mod tests {
         s.merge(quick("/lib/snare_01.wav", "snare_01.wav"));
         s.merge(quick("/lib/kick_punchy.wav", "kick_punchy.wav"));
         assert_eq!(s.samples.len(), 3);
-
-        // Category assignment via the ported classifier.
         assert_eq!(s.samples[0].category, Category::C808);
         assert_eq!(s.samples[1].category, Category::Snare);
         assert_eq!(s.samples[2].category, Category::Kick);
 
-        // Filter by category.
         s.filter = Some(Category::Snare);
         assert_eq!(s.visible(), vec![1]);
-
-        // Text search (case-insensitive).
         s.filter = None;
         s.search = "KICK".into();
         assert_eq!(s.visible(), vec![2]);
+    }
+
+    #[test]
+    fn exact_duplicates_detected_and_hideable() {
+        let mut s = SoundsTabState::default();
+        // Two different names, identical content hash → second is an exact dup.
+        s.merge(full("/lib/a.wav", "a.wav", "qHASH", ""));
+        s.merge(full("/lib/b.wav", "b.wav", "qHASH", ""));
+        s.merge(full("/lib/c.wav", "c.wav", "qOTHER", ""));
+        s.recompute_dedup();
+
+        assert_eq!(s.dup_count, 1);
+        // a (first by path) kept unique, b is the dup, c unique.
+        let by = |name: &str| s.samples.iter().find(|x| x.meta.name == name).unwrap();
+        assert_eq!(by("a.wav").dup, DupKind::Unique);
+        assert_eq!(by("b.wav").dup, DupKind::Exact);
+        assert_eq!(by("c.wav").dup, DupKind::Unique);
+
+        // Hiding dupes removes exactly the duplicate row.
+        s.hide_dupes = true;
+        assert_eq!(s.visible().len(), 2);
     }
 }

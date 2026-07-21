@@ -4,6 +4,7 @@ use eframe::egui;
 // Settings API is scaffolding for later sub-projects; the Foundation doesn't
 // read/write settings yet.
 mod classify;
+mod dedup;
 mod player;
 #[allow(dead_code)]
 mod settings;
