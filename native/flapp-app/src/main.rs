@@ -6,6 +6,9 @@ use eframe::egui;
 mod classify;
 mod dedup;
 mod player;
+// Движок переименования — готов, UI подключается в UI-фазе.
+#[allow(dead_code)]
+mod rename;
 #[allow(dead_code)]
 mod settings;
 mod sounds;
