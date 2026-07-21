@@ -4,11 +4,14 @@
 // NOT the generic GM "bass drum = kick" shorthand. Keep in sync with rules.go
 // and the 11-category taxonomy in category.go.
 
+use std::collections::HashMap;
 use std::sync::OnceLock;
 
 use regex::Regex;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+use flapp_dsp::AudioFeatures;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Category {
     C808,
     Kick,
@@ -45,6 +48,10 @@ impl Category {
         Category::HiHat, Category::OpenHat, Category::Perc, Category::Vox,
         Category::Fx, Category::Loop, Category::DrumLoop,
     ];
+
+    pub fn is_loop(self) -> bool {
+        matches!(self, Category::Loop | Category::DrumLoop)
+    }
 }
 
 use Category::*;
@@ -438,12 +445,301 @@ fn is_alpha(c: u8) -> bool {
     c.is_ascii_lowercase()
 }
 
+// ── Аудио-классификатор (порт classifier.go) ─────────────────────────────────
+
+fn key_notation() -> &'static Regex {
+    static R: OnceLock<Regex> = OnceLock::new();
+    R.get_or_init(|| {
+        Regex::new(r"(?i)\s*[\(\[]?[a-g][#b]?(maj|min|m|phryg)?\]?\s*$|\s+[a-g][#b]?(maj|min)\s*$|\s+[a-g][#b]?\d\s*$").unwrap()
+    })
+}
+
+/// Суффикс-слово (Signal 2 в Classify): «earthquake bass» → 808.
+fn classify_by_suffix_word(name: &str) -> Option<Category> {
+    let stem = name.rsplit_once('.').map(|(a, _)| a).unwrap_or(name);
+    let base = stem.to_ascii_lowercase();
+    let base = key_notation().replace(&base, "");
+    let base = base.trim_end_matches([' ', '_', '-']);
+    const RULES: &[(&str, Category)] = &[
+        (" bass", C808), ("_bass", C808), ("-bass", C808),
+        (" bell", Loop), ("_bell", Loop),
+        (" lead", Loop), ("_lead", Loop),
+        (" pluck", Loop), ("_pluck", Loop),
+        (" pad", Loop), ("_pad", Loop),
+        (" synth", Loop), ("_synth", Loop),
+        (" chant", Vox), ("_chant", Vox),
+        (" scratch", Perc), ("_scratch", Perc),
+    ];
+    RULES.iter().find(|(suf, _)| base.ends_with(suf)).map(|(_, c)| *c)
+}
+
+fn has_loop_marker(s: &str) -> bool {
+    if s.contains("loop") || s.contains("fill") || s.contains("groove") || s.contains("phrase") {
+        return true;
+    }
+    detect_loop_by_pattern(s).0
+}
+
+/// Per-category scores from acoustic features. Port of audioScores (tuned for
+/// 44.1/48 kHz material).
+fn audio_scores(f: &AudioFeatures) -> HashMap<Category, f64> {
+    let mut s: HashMap<Category, f64> = HashMap::new();
+    let add = |cat: Category, v: f64, s: &mut HashMap<Category, f64>| {
+        *s.entry(cat).or_insert(0.0) += v;
+    };
+    let dur = f.duration_s;
+    let centroid = f.spectral_centroid;
+    let zcr = f.zero_cross_rate;
+    let low_r = f.low_energy_ratio;
+    let high_r = f.high_energy_ratio;
+    let flat = f.spectral_flatness;
+    let crest = f.crest_factor;
+    let decay = f.decay_rate;
+    let onsets = f.onset_count;
+    let sub_bass = f.sub_bass_ratio;
+    let fast_attack = f.attack_time >= 0.0 && f.attack_time < 0.025;
+
+    // Hi-Hat
+    if centroid > 6000.0 { add(HiHat, 2.0, &mut s); }
+    if centroid > 9000.0 { add(HiHat, 2.0, &mut s); }
+    if flat > 0.5 { add(HiHat, 2.0, &mut s); }
+    if flat > 0.7 { add(HiHat, 2.0, &mut s); }
+    if zcr > 0.25 { add(HiHat, 1.5, &mut s); }
+    if high_r > 0.5 { add(HiHat, 1.5, &mut s); }
+    if dur < 0.25 { add(HiHat, 2.0, &mut s); }
+    if decay > 0.0 && decay < 0.08 { add(HiHat, 1.5, &mut s); }
+    if dur > 0.3 { add(HiHat, -2.0, &mut s); }
+
+    // Open Hat / Cymbal
+    if centroid > 5000.0 && zcr > 0.18 && dur > 0.25 { add(OpenHat, 3.0, &mut s); }
+    if flat > 0.3 && centroid > 5000.0 { add(OpenHat, 2.0, &mut s); }
+    if centroid > 5000.0 && dur > 0.5 && flat > 0.3 { add(OpenHat, 1.5, &mut s); }
+    if dur < 0.25 { add(OpenHat, -1.5, &mut s); }
+
+    // Kick
+    if fast_attack { add(Kick, 2.0, &mut s); }
+    if crest > 8.0 { add(Kick, 2.0, &mut s); }
+    if crest > 15.0 { add(Kick, 2.0, &mut s); }
+    if low_r > 0.40 && centroid < 700.0 { add(Kick, 2.5, &mut s); }
+    if decay > 0.0 && decay < 0.12 { add(Kick, 1.5, &mut s); }
+    if onsets == 1 { add(Kick, 1.0, &mut s); }
+    if dur < 0.8 { add(Kick, 1.0, &mut s); }
+    if sub_bass > 0.2 && centroid < 400.0 { add(Kick, 1.5, &mut s); }
+    if flat > 0.55 { add(Kick, -2.5, &mut s); }
+    if zcr > 0.20 { add(Kick, -2.0, &mut s); }
+
+    // 808 / Sub
+    if sub_bass > 0.30 { add(C808, 3.0, &mut s); }
+    if sub_bass > 0.50 { add(C808, 2.0, &mut s); }
+    if centroid < 400.0 { add(C808, 2.0, &mut s); }
+    if centroid < 250.0 { add(C808, 2.0, &mut s); }
+    if low_r > 0.55 { add(C808, 2.0, &mut s); }
+    if flat > 0.0 && flat < 0.15 && centroid < 300.0 { add(C808, 2.0, &mut s); }
+    if dur > 0.4 { add(C808, 1.0, &mut s); }
+    if decay > 0.3 { add(C808, 2.0, &mut s); }
+    if decay > 0.5 { add(C808, 1.0, &mut s); }
+    if (decay > 0.0 && decay < 0.10) && onsets <= 1 { add(C808, -2.0, &mut s); }
+    if centroid > 800.0 { add(C808, -1.0, &mut s); }
+
+    // Snare
+    if (1000.0..=5000.0).contains(&centroid) { add(Snare, 1.5, &mut s); }
+    if zcr > 0.15 { add(Snare, 1.0, &mut s); }
+    if flat > 0.25 && flat < 0.65 { add(Snare, 1.5, &mut s); }
+    if fast_attack { add(Snare, 1.0, &mut s); }
+    if dur > 0.1 && dur < 0.8 { add(Snare, 1.0, &mut s); }
+
+    // Clap
+    if (2000.0..=7000.0).contains(&centroid) { add(Clap, 1.0, &mut s); }
+    if flat > 0.50 { add(Clap, 2.0, &mut s); }
+    if f.attack_time > 0.0 && f.attack_time < 0.005 { add(Clap, 2.5, &mut s); }
+    if dur < 0.20 { add(Clap, 1.0, &mut s); }
+    if dur < 0.10 { add(Clap, 1.0, &mut s); }
+
+    // Perc
+    if (400.0..=4000.0).contains(&centroid) && dur < 2.0 { add(Perc, 2.0, &mut s); }
+    if crest > 5.0 && dur < 1.5 { add(Perc, 1.0, &mut s); }
+
+    // Vox
+    if (500.0..=3000.0).contains(&centroid) && flat > 0.05 && flat < 0.4 && dur > 0.1 {
+        add(Vox, 1.5, &mut s);
+    }
+
+    // Loop / Drum Loop
+    if onsets >= 4 { add(Loop, 2.0, &mut s); }
+    if onsets >= 8 { add(DrumLoop, 2.0, &mut s); }
+    if dur >= 4.0 { add(Loop, 2.0, &mut s); }
+    if dur >= 8.0 { add(Loop, 2.0, &mut s); }
+    if dur >= 4.0 && onsets >= 4 && centroid > 2000.0 {
+        add(DrumLoop, 3.0, &mut s);
+        add(Loop, -1.0, &mut s);
+    }
+    if dur >= 4.0 && onsets == 0 && (zcr > 0.16 || centroid > 3000.0) {
+        add(DrumLoop, 5.0, &mut s);
+    }
+    s
+}
+
+/// Legacy hard-decision classifier (когда есть только базовые 7 признаков).
+fn classify_by_audio(f: &AudioFeatures) -> Option<Category> {
+    let dur = f.duration_s;
+    let centroid = f.spectral_centroid;
+    let zcr = f.zero_cross_rate;
+    let low_r = f.low_energy_ratio;
+    let high_r = f.high_energy_ratio;
+    let fast_attack = f.attack_time >= 0.0 && f.attack_time < 0.025;
+
+    if centroid > 7000.0 && zcr > 0.30 && dur < 0.20 { return Some(HiHat); }
+    if centroid > 5000.0 && zcr > 0.20 {
+        return Some(if dur <= 0.30 { HiHat } else { OpenHat });
+    }
+    if high_r > 0.45 && centroid > 4500.0 && dur < 0.35 { return Some(HiHat); }
+    if low_r > 0.60 && centroid < 500.0 && dur > 0.25 { return Some(C808); }
+    if low_r > 0.40 && centroid < 600.0 && fast_attack && dur < 1.5 { return Some(Kick); }
+    if centroid < 400.0 && fast_attack && dur < 0.6 && low_r > 0.30 { return Some(Kick); }
+    if zcr > 0.18 && (1000.0..=6000.0).contains(&centroid) && dur < 1.2 {
+        return Some(if fast_attack && dur < 0.10 { Clap } else { Snare });
+    }
+    if centroid < 2000.0 && zcr < 0.12 && dur < 2.5 { return Some(Perc); }
+    if dur >= 4.0 {
+        return Some(if zcr > 0.16 || centroid > 3000.0 { DrumLoop } else { Loop });
+    }
+    None
+}
+
+fn best_non_loop_audio(f: &AudioFeatures) -> Option<Category> {
+    audio_scores(f)
+        .into_iter()
+        .filter(|(c, _)| !c.is_loop())
+        .filter(|(_, v)| *v > 0.0)
+        .max_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(c, _)| c)
+}
+
+/// Полная классификация: имя (×4) + суффикс-слово + аудио-скоры. Порт Classify.
+/// Возвращает (категория, from_audio).
+pub fn classify_full(name: &str, rel_path: &str, f: Option<&AudioFeatures>) -> (Category, bool) {
+    let mut scores: HashMap<Category, f64> = HashMap::new();
+
+    if let Some((cat, score)) = classify_by_name(name, rel_path) {
+        let hay = format!("{name} {rel_path}").to_ascii_lowercase();
+        if cat == Loop && !has_loop_marker(&hay) {
+            if let Some(feat) = f {
+                let is_one_shot = feat.duration_s < 4.0 || (feat.onset_count > 0 && feat.onset_count <= 2);
+                if feat.analyzed && is_one_shot {
+                    if let Some(ac) = classify_by_audio(feat) {
+                        if !ac.is_loop() {
+                            return (ac, true);
+                        }
+                    }
+                    if let Some(ac) = best_non_loop_audio(feat) {
+                        return (ac, true);
+                    }
+                    return (Fx, false);
+                }
+            }
+        }
+        *scores.entry(cat).or_insert(0.0) += score * 4.0;
+    }
+
+    if let Some(cat) = classify_by_suffix_word(name) {
+        *scores.entry(cat).or_insert(0.0) += 6.0;
+    }
+
+    let audio = f.filter(|f| f.analyzed).map(audio_scores);
+    if let Some(a) = &audio {
+        if a.values().any(|&v| v != 0.0) {
+            for (cat, v) in a {
+                *scores.entry(*cat).or_insert(0.0) += v;
+            }
+        } else if let Some(feat) = f {
+            if let Some(ac) = classify_by_audio(feat) {
+                *scores.entry(ac).or_insert(0.0) += 8.0;
+            }
+        }
+    }
+
+    let winner = scores
+        .iter()
+        .max_by(|a, b| a.1.total_cmp(b.1))
+        .map(|(c, s)| (*c, *s));
+
+    match winner {
+        Some((cat, s)) if s >= 1.0 => {
+            let from_audio = audio.as_ref().and_then(|a| a.get(&cat)).is_some_and(|&v| v > 0.0);
+            (cat, from_audio)
+        }
+        _ => {
+            if f.map(|f| f.duration_s >= 4.0).unwrap_or(false) {
+                (Loop, f.map(|f| f.analyzed).unwrap_or(false))
+            } else {
+                (Fx, false)
+            }
+        }
+    }
+}
+
+/// Стоит ли декодировать аудио-признаки: имя не классифицировалось, либо дало
+/// Loop без loop-маркера на коротком (one-shot) файле. Для остальных — нет,
+/// экономим лишний декод.
+pub fn wants_audio(name: &str, rel_path: &str, duration_s: f64) -> bool {
+    match classify_by_name(name, rel_path) {
+        None => true,
+        Some((Loop, _)) => {
+            let hay = format!("{name} {rel_path}").to_ascii_lowercase();
+            !has_loop_marker(&hay) && duration_s < 4.0
+        }
+        _ => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn c(name: &str) -> Category {
         classify_by_name(name, name).expect("classified").0
+    }
+
+    fn top(scores: &HashMap<Category, f64>) -> Category {
+        scores.iter().max_by(|a, b| a.1.total_cmp(b.1)).map(|(c, _)| *c).unwrap()
+    }
+
+    #[test]
+    fn audio_scores_pick_808_and_hihat() {
+        let f808 = AudioFeatures {
+            spectral_centroid: 120.0, sub_bass_ratio: 0.6, low_energy_ratio: 0.7,
+            duration_s: 1.5, decay_rate: 0.6, spectral_flatness: 0.05, analyzed: true,
+            ..Default::default()
+        };
+        assert_eq!(top(&audio_scores(&f808)), C808);
+
+        let fhh = AudioFeatures {
+            spectral_centroid: 9500.0, spectral_flatness: 0.75, zero_cross_rate: 0.3,
+            high_energy_ratio: 0.6, duration_s: 0.15, decay_rate: 0.05, analyzed: true,
+            ..Default::default()
+        };
+        assert_eq!(top(&audio_scores(&fhh)), HiHat);
+    }
+
+    #[test]
+    fn classify_full_reclassifies_ambiguous_synth_oneshot_via_audio() {
+        // "synth" → Loop by name; a short 808-ish one-shot must NOT stay Loop.
+        let f = AudioFeatures {
+            spectral_centroid: 120.0, sub_bass_ratio: 0.6, low_energy_ratio: 0.7,
+            duration_s: 1.0, decay_rate: 0.6, spectral_flatness: 0.05, analyzed: true,
+            ..Default::default()
+        };
+        assert!(wants_audio("deep synth.wav", "deep synth.wav", 1.0));
+        let (cat, from_audio) = classify_full("deep synth.wav", "deep synth.wav", Some(&f));
+        assert!(!cat.is_loop(), "got {cat:?}");
+        assert!(from_audio);
+    }
+
+    #[test]
+    fn confident_name_skips_audio() {
+        // A clear kick name shouldn't need audio.
+        assert!(!wants_audio("kick_punchy.wav", "kick_punchy.wav", 0.3));
+        assert_eq!(classify_full("kick_punchy.wav", "kick_punchy.wav", None).0, Kick);
     }
 
     #[test]

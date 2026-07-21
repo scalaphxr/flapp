@@ -1226,6 +1226,287 @@ mod fp_tests {
         let d = hamming_hex(&fp_a, &fingerprint(&b, sr));
         assert!(d > 20, "distinct tones should differ, got {d}");
     }
+
+    #[test]
+    fn features_reflect_spectrum() {
+        let sr = 44100u32;
+        let low = extract_features(&sine(60.0, sr, sr as usize), sr);
+        assert!(low.analyzed);
+        assert!(low.spectral_centroid < 500.0, "low centroid {}", low.spectral_centroid);
+        assert!(low.sub_bass_ratio > 0.3, "sub-bass {}", low.sub_bass_ratio);
+
+        let high = extract_features(&sine(10000.0, sr, sr as usize), sr);
+        assert!(high.spectral_centroid > 6000.0, "high centroid {}", high.spectral_centroid);
+        assert!(high.high_energy_ratio > 0.3, "high ratio {}", high.high_energy_ratio);
+    }
+}
+
+// ── Аудио-признаки (для аудио-классификатора) ─────────────────────────────────
+
+/// Спектрально-временные признаки для аудио-классификации. Порт
+/// domain.AudioFeatures + audio.featuresFromPCM/spectralDescriptors. Считаются
+/// на НАТИВНОМ SR (пороги centroid доходят до 6–9 кГц).
+#[derive(Debug, Default, Clone)]
+pub struct AudioFeatures {
+    pub duration_s: f64,
+    pub sample_rate: u32,
+    pub rms: f64,
+    pub peak: f64,
+    pub zero_cross_rate: f64,
+    pub attack_time: f64,
+    pub crest_factor: f64,
+    pub onset_count: u32,
+    pub spectral_centroid: f64,
+    pub low_energy_ratio: f64,
+    pub high_energy_ratio: f64,
+    pub sub_bass_ratio: f64,
+    pub spectral_flatness: f64,
+    pub decay_rate: f64,
+    pub analyzed: bool,
+}
+
+/// Декодирует файл в моно на нативном SR (усреднение каналов), не более
+/// `max_samples` сэмплов. Для аудио-классификации нужен нативный SR (в отличие
+/// от 11025 Гц в analyze_one). Возвращает None при ошибке.
+pub fn decode_mono_native(path: &str, max_samples: usize) -> Option<(Vec<f32>, u32)> {
+    use symphonia::core::audio::SampleBuffer;
+    use symphonia::core::codecs::DecoderOptions;
+    use symphonia::core::formats::FormatOptions;
+    use symphonia::core::io::MediaSourceStream;
+    use symphonia::core::meta::MetadataOptions;
+    use symphonia::core::probe::Hint;
+
+    let file = fs::File::open(path).ok()?;
+    let mss = MediaSourceStream::new(Box::new(file), Default::default());
+    let mut hint = Hint::new();
+    if let Some(ext) = Path::new(path).extension().and_then(|e| e.to_str()) {
+        hint.with_extension(ext);
+    }
+    let probed = symphonia::default::get_probe()
+        .format(&hint, mss, &FormatOptions::default(), &MetadataOptions::default())
+        .ok()?;
+    let mut fmt = probed.format;
+    let track = fmt.default_track()?;
+    let codec_params = track.codec_params.clone();
+    let track_id = track.id;
+    let sr = codec_params.sample_rate.unwrap_or(44100).max(1);
+    let mut decoder = symphonia::default::get_codecs()
+        .make(&codec_params, &DecoderOptions::default())
+        .ok()?;
+
+    let mut mono: Vec<f32> = Vec::new();
+    let mut sample_buf: Option<SampleBuffer<f32>> = None;
+    'outer: loop {
+        let packet = match fmt.next_packet() {
+            Ok(p) => p,
+            Err(_) => break,
+        };
+        if packet.track_id() != track_id {
+            continue;
+        }
+        let decoded = match decoder.decode(&packet) {
+            Ok(d) => d,
+            Err(_) => continue,
+        };
+        let spec = *decoded.spec();
+        let ch = spec.channels.count().max(1);
+        let needed = decoded.capacity() * ch;
+        if sample_buf.as_ref().map(|b| b.capacity() < needed).unwrap_or(true) {
+            sample_buf = Some(SampleBuffer::new(decoded.capacity() as u64, spec));
+        }
+        let buf = sample_buf.as_mut().unwrap();
+        buf.copy_interleaved_ref(decoded);
+        for frame in buf.samples().chunks(ch) {
+            let avg = frame.iter().sum::<f32>() / ch as f32;
+            mono.push(avg);
+            if mono.len() >= max_samples {
+                break 'outer;
+            }
+        }
+    }
+    if mono.is_empty() {
+        None
+    } else {
+        Some((mono, sr))
+    }
+}
+
+fn rms_of_slice(s: &[f32]) -> f64 {
+    if s.is_empty() {
+        return 0.0;
+    }
+    let sum: f64 = s.iter().map(|&v| v as f64 * v as f64).sum();
+    (sum / s.len() as f64).sqrt()
+}
+
+fn loudest_window(s: &[f32], win: usize) -> usize {
+    if s.len() <= win {
+        return 0;
+    }
+    let step = (win / 4).max(1);
+    let (mut best_start, mut best_e) = (0usize, -1.0f64);
+    let mut start = 0;
+    while start + win <= s.len() {
+        let e: f64 = s[start..start + win].iter().map(|&v| v as f64 * v as f64).sum();
+        if e > best_e {
+            best_e = e;
+            best_start = start;
+        }
+        start += step;
+    }
+    best_start
+}
+
+/// Извлекает признаки из моно-буфера (нативный SR). Порт featuresFromPCM +
+/// spectralDescriptors.
+pub fn extract_features(mono: &[f32], sr: u32) -> AudioFeatures {
+    use rustfft::{num_complex::Complex, FftPlanner};
+    let mut f = AudioFeatures {
+        sample_rate: sr,
+        duration_s: mono.len() as f64 / sr.max(1) as f64,
+        analyzed: true,
+        ..Default::default()
+    };
+    if mono.is_empty() {
+        f.analyzed = false;
+        return f;
+    }
+    let sr_f = sr.max(1) as f64;
+
+    // Время: RMS, пик, ZCR, атака, crest.
+    let mut sum_sq = 0.0f64;
+    let mut peak = 0.0f64;
+    let mut zc = 0u64;
+    let mut prev = 0.0f32;
+    for (i, &s) in mono.iter().enumerate() {
+        sum_sq += s as f64 * s as f64;
+        if (s as f64).abs() > peak {
+            peak = (s as f64).abs();
+        }
+        if i > 0 && ((s >= 0.0) != (prev >= 0.0)) {
+            zc += 1;
+        }
+        prev = s;
+    }
+    let n = mono.len() as f64;
+    f.rms = (sum_sq / n).sqrt();
+    f.peak = peak;
+    f.zero_cross_rate = zc as f64 / n;
+    if peak > 0.0 {
+        let thr = 0.9 * peak;
+        for (i, &s) in mono.iter().enumerate() {
+            if (s as f64).abs() >= thr {
+                f.attack_time = i as f64 / sr_f;
+                break;
+            }
+        }
+        if f.rms > 0.0 {
+            f.crest_factor = peak / f.rms;
+        }
+    }
+
+    // OnsetCount: 10ms окна, где RMS растёт на >30% пикового окна.
+    let win_sz = (sr / 100).max(1) as usize;
+    let mut peak_win_rms = 0.0f64;
+    let mut i = 0;
+    while i + win_sz <= mono.len() {
+        let e = rms_of_slice(&mono[i..i + win_sz]);
+        if e > peak_win_rms {
+            peak_win_rms = e;
+        }
+        i += win_sz;
+    }
+    if peak_win_rms > 0.0 {
+        let threshold = peak_win_rms * 0.3;
+        let mut prev_win = 0.0f64;
+        let mut i = 0;
+        while i + win_sz <= mono.len() {
+            let cur = rms_of_slice(&mono[i..i + win_sz]);
+            if cur - prev_win > threshold {
+                f.onset_count += 1;
+            }
+            prev_win = cur;
+            i += win_sz;
+        }
+    }
+
+    // Частота: один FFT по громкому окну.
+    let mut win = 4096usize;
+    if mono.len() < win {
+        win = next_pow2(mono.len()) / 2;
+        if win < 256 {
+            win = mono.len();
+        }
+    }
+    win = next_pow2(win);
+    if win > mono.len() {
+        win = next_pow2(mono.len() / 2 + 1);
+    }
+    if win < 64 {
+        return f;
+    }
+    let start_best = loudest_window(mono, win);
+
+    // DecayRate: секунды от пикового окна до падения до 50% RMS.
+    if start_best + win_sz <= mono.len() {
+        let peak_e = rms_of_slice(&mono[start_best..start_best + win_sz]);
+        let half_e = peak_e * 0.5;
+        f.decay_rate = (mono.len() - start_best) as f64 / sr_f;
+        let mut i = start_best + win_sz;
+        while i + win_sz <= mono.len() {
+            if rms_of_slice(&mono[i..i + win_sz]) <= half_e {
+                f.decay_rate = (i - start_best) as f64 / sr_f;
+                break;
+            }
+            i += win_sz;
+        }
+    }
+
+    let w = hann(win);
+    let mut buf = vec![Complex::new(0.0f32, 0.0); win];
+    for i in 0..win {
+        buf[i].re = mono[start_best + i] * w[i] as f32;
+    }
+    let mut planner = FftPlanner::<f32>::new();
+    planner.plan_fft_forward(win).process(&mut buf);
+
+    let (mut mag_sum, mut weighted, mut low_e, mut high_e, mut sub_e, mut total_e) =
+        (0.0f64, 0.0f64, 0.0f64, 0.0f64, 0.0f64, 0.0f64);
+    let (mut log_sum, mut log_count) = (0.0f64, 0u64);
+    let bin_hz = sr_f / win as f64;
+    for k in 1..win / 2 {
+        let mag = (buf[k].re as f64).hypot(buf[k].im as f64);
+        let freq = k as f64 * bin_hz;
+        mag_sum += mag;
+        weighted += mag * freq;
+        total_e += mag;
+        if freq < 80.0 {
+            sub_e += mag;
+        }
+        if freq < 150.0 {
+            low_e += mag;
+        }
+        if freq > 6000.0 {
+            high_e += mag;
+        }
+        if mag > 1e-10 {
+            log_sum += mag.ln();
+            log_count += 1;
+        }
+    }
+    if mag_sum > 0.0 {
+        f.spectral_centroid = weighted / mag_sum;
+    }
+    if total_e > 0.0 {
+        f.low_energy_ratio = low_e / total_e;
+        f.high_energy_ratio = high_e / total_e;
+        f.sub_bass_ratio = sub_e / total_e;
+    }
+    if log_count > 0 && mag_sum > 0.0 {
+        f.spectral_flatness =
+            (log_sum / log_count as f64).exp() / (mag_sum / log_count as f64);
+    }
+    f
 }
 
 // ── Кодирование WAV (для player_decode_to_wav) ────────────────────────────────

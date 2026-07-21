@@ -13,17 +13,24 @@ use eframe::egui;
 use egui_extras::{Column, TableBuilder};
 
 use flapp_audio::Player;
-use flapp_dsp::{analyze_one, probe_quick, scan_dir_recursive, AnalyzerCache, AudioMeta};
+use flapp_dsp::{
+    analyze_one, decode_mono_native, extract_features, probe_quick, scan_dir_recursive,
+    AnalyzerCache, AudioMeta,
+};
 
-use crate::classify::{classify_by_name, Category};
+use crate::classify::{classify_by_name, classify_full, wants_audio, Category};
 use crate::dedup::{quick_hash, DedupIndex, DupKind};
 use crate::util::fmt_time;
 
-/// Одно сообщение анализа: метаданные + контент-хэш (для точного дедупа).
-/// Хэш пуст на быстрой стадии, заполняется на полной.
+/// Кап декода признаков (нативный SR) для аудио-классификации ambiguous-файлов.
+const FEATURE_MAX_SAMPLES: usize = 44_100 * 12;
+
+/// Одно сообщение анализа: метаданные + контент-хэш (для точного дедупа) +
+/// разрешённая категория (считается в воркере, не на UI-потоке).
 struct SoundMsg {
     meta: AudioMeta,
     content_hash: String,
+    category: Category,
 }
 
 struct Sample {
@@ -98,11 +105,14 @@ impl SoundsTabState {
             let mut paths: Vec<String> = Vec::new();
             scan_dir_recursive(&dir.to_string_lossy(), &mut paths);
             paths.sort();
-            // Стадия 1: мгновенные заголовки (хэш ещё не считаем).
+            // Стадия 1: мгновенные заголовки + имя-классификация (без аудио).
             paths.par_iter().for_each_with(tx.clone(), |s, p| {
-                let _ = s.send(SoundMsg { meta: probe_quick(p), content_hash: String::new() });
+                let meta = probe_quick(p);
+                let category = classify_by_name(&meta.name, p).map(|(c, _)| c).unwrap_or(Category::Fx);
+                let _ = s.send(SoundMsg { meta, content_hash: String::new(), category });
             });
-            // Стадия 2: полный анализ + контент-хэш для дедупа.
+            // Стадия 2: полный анализ + контент-хэш + аудио-классификация
+            // ambiguous-файлов (для них — доп. декод на нативном SR).
             paths.par_iter().for_each_with(tx.clone(), |s, p| {
                 let meta = if let Some(m) = cache.get(p) {
                     m
@@ -112,16 +122,19 @@ impl SoundsTabState {
                     m
                 };
                 let content_hash = quick_hash(std::path::Path::new(p)).unwrap_or_default();
-                let _ = s.send(SoundMsg { meta, content_hash });
+                let feat = if wants_audio(&meta.name, p, meta.duration_s) {
+                    decode_mono_native(p, FEATURE_MAX_SAMPLES).map(|(m, sr)| extract_features(&m, sr))
+                } else {
+                    None
+                };
+                let category = classify_full(&meta.name, p, feat.as_ref()).0;
+                let _ = s.send(SoundMsg { meta, content_hash, category });
             });
         });
     }
 
     fn merge(&mut self, msg: SoundMsg) {
-        let SoundMsg { meta, content_hash } = msg;
-        let category = classify_by_name(&meta.name, &meta.path)
-            .map(|(c, _)| c)
-            .unwrap_or(Category::Fx);
+        let SoundMsg { meta, content_hash, category } = msg;
         match self.index.get(&meta.path).copied() {
             Some(i) => {
                 let existing_full = self.samples[i].meta.partial != Some(true);
@@ -347,10 +360,14 @@ impl SoundsTabState {
 mod tests {
     use super::*;
 
+    fn cat_of(name: &str, path: &str) -> Category {
+        classify_by_name(name, path).map(|(c, _)| c).unwrap_or(Category::Fx)
+    }
     fn quick(path: &str, name: &str) -> SoundMsg {
         SoundMsg {
             meta: AudioMeta { path: path.into(), name: name.into(), partial: Some(true), ..Default::default() },
             content_hash: String::new(),
+            category: cat_of(name, path),
         }
     }
     fn full(path: &str, name: &str, hash: &str, fp: &str) -> SoundMsg {
@@ -363,6 +380,7 @@ mod tests {
                 ..Default::default()
             },
             content_hash: hash.into(),
+            category: cat_of(name, path),
         }
     }
 
