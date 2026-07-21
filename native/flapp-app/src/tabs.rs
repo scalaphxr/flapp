@@ -8,21 +8,8 @@ pub enum Tab {
 }
 
 #[derive(Default)]
-pub struct SoundsTabState {
-    pub scratch: String,
-}
-
-#[derive(Default)]
 pub struct SettingsTabState {
     pub scratch: String,
-}
-
-impl SoundsTabState {
-    pub fn ui(&mut self, ui: &mut egui::Ui) {
-        ui.heading("SOUNDS");
-        ui.label("TODO: sound library (Sub-project 2)");
-        ui.text_edit_singleline(&mut self.scratch);
-    }
 }
 
 impl SettingsTabState {
@@ -37,21 +24,21 @@ impl SettingsTabState {
 mod tests {
     use super::*;
 
-    // The stub states are plain structs held by FlappApp across frames; switching
-    // the active Tab must not touch other tabs' fields.
+    // Each tab's state is a plain struct held by FlappApp across frames; switching
+    // the active Tab must not touch another tab's fields.
     #[test]
-    fn switching_tabs_preserves_other_tab_state() {
-        let mut sounds = SoundsTabState::default();
-        let mut settings = SettingsTabState::default();
+    fn independent_tab_state_persists_across_switches() {
+        let mut a = SettingsTabState::default();
+        let mut b = SettingsTabState::default();
         let mut active = Tab::Sounds;
         assert_eq!(active, Tab::Sounds);
-        sounds.scratch = "typed in sounds".to_string();
-        active = Tab::Settings; // switch away
+        a.scratch = "a".to_string();
+        active = Tab::Settings;
         assert_eq!(active, Tab::Settings);
-        settings.scratch = "typed in settings".to_string();
-        active = Tab::Sounds; // switch back
+        b.scratch = "b".to_string();
+        active = Tab::Sounds;
         assert_eq!(active, Tab::Sounds);
-        assert_eq!(sounds.scratch, "typed in sounds");
-        assert_eq!(settings.scratch, "typed in settings");
+        assert_eq!(a.scratch, "a");
+        assert_eq!(b.scratch, "b");
     }
 }

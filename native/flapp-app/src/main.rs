@@ -3,14 +3,18 @@ use eframe::egui;
 
 // Settings API is scaffolding for later sub-projects; the Foundation doesn't
 // read/write settings yet.
+mod classify;
 mod player;
 #[allow(dead_code)]
 mod settings;
+mod sounds;
 mod tabs;
 mod theme;
+mod util;
 
 use player::PlayerTabState;
-use tabs::{SettingsTabState, SoundsTabState, Tab};
+use sounds::SoundsTabState;
+use tabs::{SettingsTabState, Tab};
 
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
@@ -62,7 +66,7 @@ impl eframe::App for FlappApp {
             });
         });
         egui::CentralPanel::default().show(ui, |ui| match self.tab {
-            Tab::Sounds => self.sounds.ui(ui),
+            Tab::Sounds => self.sounds.ui(ui, &mut self.audio),
             Tab::Player => self.player.ui(ui, &mut self.audio),
             Tab::Settings => self.settings.ui(ui),
         });

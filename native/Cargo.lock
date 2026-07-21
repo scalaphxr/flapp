@@ -1304,6 +1304,7 @@ dependencies = [
  "flapp-audio",
  "flapp-dsp",
  "rayon",
+ "regex",
  "rfd",
  "serde",
  "serde_json",

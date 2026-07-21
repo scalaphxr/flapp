@@ -16,6 +16,7 @@ use flapp_audio::Player;
 use flapp_dsp::{analyze_one, probe_quick, scan_dir_recursive, AnalyzerCache, AudioMeta};
 
 use crate::theme::WAVE_DIM;
+use crate::util::fmt_time;
 
 pub struct PlayerTabState {
     folder: Option<PathBuf>,
@@ -355,20 +356,4 @@ mod tests {
         assert_eq!(s.tracks[0].bpm, Some(140.0));
         assert_eq!(s.pending(), 0);
     }
-
-    #[test]
-    fn fmt_time_formats_minutes_seconds() {
-        assert_eq!(fmt_time(0.0), "0:00");
-        assert_eq!(fmt_time(9.0), "0:09");
-        assert_eq!(fmt_time(75.0), "1:15");
-        assert_eq!(fmt_time(-1.0), "0:00");
-    }
-}
-
-fn fmt_time(secs: f32) -> String {
-    if !secs.is_finite() || secs <= 0.0 {
-        return "0:00".to_string();
-    }
-    let s = secs as u32;
-    format!("{}:{:02}", s / 60, s % 60)
 }
