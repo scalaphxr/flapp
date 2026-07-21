@@ -977,6 +977,59 @@ pub fn analyze_one(path: &str) -> AudioMeta {
     }
 }
 
+/// Per-phase timings in milliseconds for one file (analysis benchmark only).
+#[derive(Default, Clone, Copy)]
+pub struct PhaseMs {
+    pub probe: f64,
+    /// decode + waveform peaks + DSP mono buffer (single streaming pass).
+    pub decode: f64,
+    pub bpm: f64,
+    pub key: f64,
+}
+
+/// Mirror of `analyze_one` that times each phase. Used by the bench to find the
+/// dominant cost before optimizing.
+pub fn profile_one(path: &str) -> PhaseMs {
+    use std::time::Instant;
+    let mut t = PhaseMs::default();
+
+    let s = Instant::now();
+    let probed = probe_container(path);
+    t.probe = s.elapsed().as_secs_f64() * 1000.0;
+    let (_, duration_s, sample_rate, _, _) = match probed {
+        Ok(v) => v,
+        Err(_) => return t,
+    };
+    let n_frames = if duration_s > 0.0 { (duration_s * sample_rate as f64) as u64 } else { 0 };
+
+    const TARGET_SR: u32 = 11025;
+    const BPM_WINDOW_S: f64 = 50.0;
+    const KEY_WINDOW_S: f64 = 240.0;
+
+    let s = Instant::now();
+    let streamed = stream_peaks_and_dsp(path, n_frames, 4096, TARGET_SR, KEY_WINDOW_S, duration_s);
+    t.decode = s.elapsed().as_secs_f64() * 1000.0;
+    let dsp = &streamed.dsp_mono;
+    let dsp_sr = streamed.dsp_sr;
+
+    let bpm_n = (BPM_WINDOW_S * dsp_sr as f64) as usize;
+    let bpm_slice = if dsp.len() > bpm_n {
+        let a = (dsp.len() - bpm_n) / 2;
+        &dsp[a..a + bpm_n]
+    } else {
+        &dsp[..]
+    };
+    let s = Instant::now();
+    let _ = compute_bpm(bpm_slice, dsp_sr);
+    t.bpm = s.elapsed().as_secs_f64() * 1000.0;
+
+    let s = Instant::now();
+    let _ = detect_key(dsp, dsp_sr);
+    t.key = s.elapsed().as_secs_f64() * 1000.0;
+
+    t
+}
+
 // ── Кодирование WAV (для player_decode_to_wav) ────────────────────────────────
 
 pub fn encode_wav(samples: &[f32], sr: u32, channels: u32) -> Vec<u8> {
