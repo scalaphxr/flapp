@@ -104,7 +104,15 @@ impl SoundsTabState {
             use rayon::prelude::*;
             let mut paths: Vec<String> = Vec::new();
             scan_dir_recursive(&dir.to_string_lossy(), &mut paths);
+            // Архивы: извлекаем аудио из .zip и добавляем к списку (структура
+            // папок сохраняется → классификатор по пути работает).
+            if let Some(root) = dirs::cache_dir().map(|d| d.join("flapp").join("extracted")) {
+                for zip in crate::archive::find_zips(&dir.to_string_lossy()) {
+                    paths.extend(crate::archive::extract_zip_audio(&zip, &root));
+                }
+            }
             paths.sort();
+            paths.dedup();
             // Стадия 1: мгновенные заголовки + имя-классификация (без аудио).
             paths.par_iter().for_each_with(tx.clone(), |s, p| {
                 let meta = probe_quick(p);

@@ -3,6 +3,7 @@ use eframe::egui;
 
 // Settings API is scaffolding for later sub-projects; the Foundation doesn't
 // read/write settings yet.
+mod archive;
 mod classify;
 mod dedup;
 mod player;
