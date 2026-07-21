@@ -11,6 +11,9 @@ mod player;
 mod rename;
 #[allow(dead_code)]
 mod settings;
+// NL-поиск — готов, UI подключается в UI-фазе.
+#[allow(dead_code)]
+mod smartsearch;
 mod sounds;
 mod tabs;
 mod theme;
