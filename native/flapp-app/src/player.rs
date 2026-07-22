@@ -15,7 +15,7 @@ use egui_extras::{Column, TableBuilder};
 use flapp_audio::Player;
 use flapp_dsp::{analyze_one, probe_quick, scan_dir_recursive, AnalyzerCache, AudioMeta};
 
-use crate::theme::WAVE_DIM;
+use crate::theme::{self, WAVE_DIM};
 use crate::util::fmt_time;
 
 pub struct PlayerTabState {
@@ -147,7 +147,7 @@ impl PlayerTabState {
 
         // ── Top bar: folder + progress ────────────────────────────────────
         ui.horizontal(|ui| {
-            if ui.button("📂 Open folder").clicked() {
+            if ui.button("Open folder").clicked() {
                 self.pick_folder();
             }
             if let Some(f) = &self.folder {
@@ -165,6 +165,24 @@ impl PlayerTabState {
         });
         ui.separator();
 
+        if self.tracks.is_empty() {
+            ui.add_space(90.0);
+            ui.vertical_centered(|ui| {
+                ui.label(
+                    egui::RichText::new(theme::tracked("Open a folder to analyze"))
+                        .color(theme::MID)
+                        .size(13.0),
+                );
+                ui.add_space(8.0);
+                ui.label(
+                    egui::RichText::new("BPM · key · waveform")
+                        .color(theme::DIM)
+                        .size(11.0),
+                );
+            });
+            return;
+        }
+
         // ── Transport ─────────────────────────────────────────────────────
         self.transport(ui, audio);
 
@@ -178,7 +196,7 @@ impl PlayerTabState {
 
     fn transport(&mut self, ui: &mut egui::Ui, audio: &mut Player) {
         ui.horizontal(|ui| {
-            if ui.button("⏮").clicked() {
+            if ui.button("|◀").clicked() {
                 if let Some(i) = self.selected {
                     if i > 0 {
                         self.play_index(i - 1, audio);
@@ -186,7 +204,7 @@ impl PlayerTabState {
                 }
             }
             let playing = audio.is_playing();
-            if ui.button(if playing { "⏸" } else { "▶" }).clicked() {
+            if ui.button(if playing { "||" } else { "▶" }).clicked() {
                 if playing {
                     audio.pause();
                 } else if self.playing.is_some() {
@@ -195,11 +213,11 @@ impl PlayerTabState {
                     self.play_index(i, audio);
                 }
             }
-            if ui.button("⏹").clicked() {
+            if ui.button("■").clicked() {
                 audio.stop();
                 self.playing = None;
             }
-            if ui.button("⏭").clicked() {
+            if ui.button("▶|").clicked() {
                 if let Some(i) = self.selected {
                     if i + 1 < self.tracks.len() {
                         self.play_index(i + 1, audio);

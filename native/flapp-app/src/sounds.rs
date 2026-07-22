@@ -20,6 +20,7 @@ use flapp_dsp::{
 
 use crate::classify::{classify_by_name, classify_full, wants_audio, Category};
 use crate::dedup::{quick_hash, DedupIndex, DupKind};
+use crate::theme;
 use crate::util::fmt_time;
 
 /// Кап декода признаков (нативный SR) для аудио-классификации ambiguous-файлов.
@@ -255,7 +256,7 @@ impl SoundsTabState {
         self.drain(ui.ctx());
 
         ui.horizontal(|ui| {
-            if ui.button("📂 Open folder").clicked() {
+            if ui.button("Open folder").clicked() {
                 self.pick_folder();
             }
             if let Some(f) = &self.folder {
@@ -287,8 +288,7 @@ impl SoundsTabState {
         });
 
         ui.horizontal(|ui| {
-            ui.label("🔍");
-            ui.text_edit_singleline(&mut self.search);
+                        ui.text_edit_singleline(&mut self.search);
             if !self.search.is_empty() && ui.button("✕").clicked() {
                 self.search.clear();
             }
@@ -299,6 +299,24 @@ impl SoundsTabState {
             }
         });
         ui.separator();
+
+        if self.samples.is_empty() {
+            ui.add_space(90.0);
+            ui.vertical_centered(|ui| {
+                ui.label(
+                    egui::RichText::new(theme::tracked("Open a folder to begin"))
+                        .color(theme::MID)
+                        .size(13.0),
+                );
+                ui.add_space(8.0);
+                ui.label(
+                    egui::RichText::new("harvests folders · zip · 7z · flp")
+                        .color(theme::DIM)
+                        .size(11.0),
+                );
+            });
+            return;
+        }
 
         self.table(ui, audio);
     }
