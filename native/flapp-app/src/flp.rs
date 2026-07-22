@@ -543,6 +543,53 @@ mod tests {
         assert!(parse_flp(b"not an flp file", "x.flp").is_none());
     }
 
+    // Реальная проверка на .flp пользователя:
+    //   FLAPP_FLP_DIR="E:\BEATS\FLPs & ZIPs" cargo test -p flapp-app real_flp_smoke -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn real_flp_smoke() {
+        let Ok(dir) = std::env::var("FLAPP_FLP_DIR") else {
+            eprintln!("set FLAPP_FLP_DIR");
+            return;
+        };
+        let mut flps = Vec::new();
+        super::find_flps(std::path::Path::new(&dir), &mut flps, 0);
+        println!("found {} .flp files", flps.len());
+        let (mut parsed, mut with_bpm, mut sample_refs, mut existing, mut with_notes) = (0, 0, 0usize, 0, 0);
+        for f in &flps {
+            let Ok(raw) = std::fs::read(f) else { continue };
+            let base = std::path::Path::new(f).file_name().and_then(|n| n.to_str()).unwrap_or("p.flp");
+            if let Some(p) = parse_flp(&raw, base) {
+                parsed += 1;
+                if p.bpm > 0.0 {
+                    with_bpm += 1;
+                }
+                if !p.notes.is_empty() {
+                    with_notes += 1;
+                }
+                sample_refs += p.sample_paths.len();
+                for sp in &p.sample_paths {
+                    if std::path::Path::new(sp).is_file() {
+                        existing += 1;
+                    }
+                }
+                if parsed <= 6 {
+                    println!(
+                        "  {base} → bpm {:.1}  samples {}  notes {}  title {:?}",
+                        p.bpm,
+                        p.sample_paths.len(),
+                        p.notes.len(),
+                        p.title
+                    );
+                }
+            }
+        }
+        println!(
+            "parsed {parsed}/{}  with_bpm {with_bpm}  with_notes {with_notes}  sample_refs {sample_refs}  existing_on_disk {existing}",
+            flps.len()
+        );
+    }
+
     #[test]
     fn parses_pattern_notes() {
         let mut b = Builder::default();
