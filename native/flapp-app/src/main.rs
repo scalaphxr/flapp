@@ -2,7 +2,6 @@
 use eframe::egui;
 
 mod archive;
-mod background;
 mod classify;
 mod dedup;
 // Экспорт паков — движок готов, UI подключается в UI-фазе.
@@ -79,7 +78,6 @@ impl eframe::App for FlappApp {
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.maybe_screenshot(&ui.ctx().clone());
-        background::draw(&ui.ctx().clone());
 
         // ── Консольная шапка: вордмарк + вкладки, прозрачный фон ──────────────
         let hdr = egui::Panel::top("hdr")
