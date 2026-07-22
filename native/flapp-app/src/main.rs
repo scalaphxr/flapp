@@ -10,6 +10,9 @@ mod dedup;
 #[allow(dead_code)]
 mod export;
 mod flp;
+// MIDI-экспорт из .flp — движок готов, UI подключается в UI-фазе.
+#[allow(dead_code)]
+mod midi;
 mod player;
 // Движок переименования — готов, UI подключается в UI-фазе.
 #[allow(dead_code)]
