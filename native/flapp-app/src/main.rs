@@ -6,6 +6,9 @@ use eframe::egui;
 mod archive;
 mod classify;
 mod dedup;
+// Экспорт паков — движок готов, UI подключается в UI-фазе.
+#[allow(dead_code)]
+mod export;
 mod player;
 // Движок переименования — готов, UI подключается в UI-фазе.
 #[allow(dead_code)]
