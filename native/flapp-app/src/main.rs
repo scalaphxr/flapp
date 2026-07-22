@@ -9,6 +9,7 @@ mod dedup;
 // Экспорт паков — движок готов, UI подключается в UI-фазе.
 #[allow(dead_code)]
 mod export;
+mod flp;
 mod player;
 // Движок переименования — готов, UI подключается в UI-фазе.
 #[allow(dead_code)]

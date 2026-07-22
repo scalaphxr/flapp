@@ -111,6 +111,8 @@ impl SoundsTabState {
                     paths.extend(crate::archive::extract_zip_audio(&zip, &root));
                 }
             }
+            // FL-проекты: добавляем сэмплы, на которые ссылаются .flp (если есть на диске).
+            paths.extend(crate::flp::harvest_flp_sample_paths(&dir.to_string_lossy()));
             paths.sort();
             paths.dedup();
             // Стадия 1: мгновенные заголовки + имя-классификация (без аудио).
