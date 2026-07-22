@@ -107,8 +107,8 @@ impl SoundsTabState {
             // Архивы: извлекаем аудио из .zip и добавляем к списку (структура
             // папок сохраняется → классификатор по пути работает).
             if let Some(root) = dirs::cache_dir().map(|d| d.join("flapp").join("extracted")) {
-                for zip in crate::archive::find_zips(&dir.to_string_lossy()) {
-                    paths.extend(crate::archive::extract_zip_audio(&zip, &root));
+                for arc in crate::archive::find_archives(&dir.to_string_lossy()) {
+                    paths.extend(crate::archive::extract_archive_audio(&arc, &root));
                 }
             }
             // FL-проекты: добавляем сэмплы, на которые ссылаются .flp (если есть на диске).
